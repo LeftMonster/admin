@@ -85,7 +85,7 @@ const form = reactive({
   id: 0,
   title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
   slug: '',
-  seo_meta: { keywords: '', description: '' } as any,
+  seo_meta: { keywords: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' }, description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } } as any,
   description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
   content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
   price_amount: 0,
@@ -105,6 +105,26 @@ const siteCurrency = ref('CNY')
 
 const getCurrentLangName = () => {
   return languages.value.find((item) => item.code === currentLang.value)?.name || t('admin.common.lang.zhCN')
+}
+
+const emptyI18nString = () => ({ 'zh-CN': '', 'zh-TW': '', 'en-US': '' })
+
+const normalizeSeoMeta = (raw: any) => {
+  if (!raw) return { keywords: emptyI18nString(), description: emptyI18nString() }
+  const normalize = (val: any) => {
+    if (!val) return emptyI18nString()
+    if (typeof val === 'string') {
+      return { 'zh-CN': val, 'zh-TW': '', 'en-US': '' }
+    }
+    if (typeof val === 'object') {
+      return { 'zh-CN': val['zh-CN'] || '', 'zh-TW': val['zh-TW'] || '', 'en-US': val['en-US'] || '' }
+    }
+    return emptyI18nString()
+  }
+  return {
+    keywords: normalize(raw.keywords),
+    description: normalize(raw.description),
+  }
 }
 
 const formatPrice = (amount: any, currency: any) => {
@@ -512,7 +532,7 @@ const openEditModal = (product: any) => {
     id: product.id,
     title: product.title || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
     slug: product.slug,
-    seo_meta: product.seo_meta || { keywords: '', description: '' },
+    seo_meta: normalizeSeoMeta(product.seo_meta),
     description: product.description || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
     content: product.content || { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
     price_amount: Number(product.price_amount || 0),
@@ -540,7 +560,7 @@ const resetForm = () => {
     id: 0,
     title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
     slug: '',
-    seo_meta: { keywords: '', description: '' },
+    seo_meta: { keywords: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' }, description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } },
     description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
     content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
     price_amount: 0,
@@ -918,14 +938,14 @@ watch(
             </div>
 
             <div class="col-span-1">
-              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.seoMetaKeywords') }}</label>
-              <Input v-model="form.seo_meta.keywords" :placeholder="t('admin.products.form.seoMetaKeywordsPlaceholder')" />
+              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.seoMetaKeywords', { lang: getCurrentLangName() }) }}</label>
+              <Input v-model="form.seo_meta.keywords[currentLang]" :placeholder="t('admin.products.form.seoMetaKeywordsPlaceholder')" />
               <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.products.form.seoMetaKeywordsTip') }}</p>
             </div>
 
             <div class="col-span-2">
-              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.seoMetaDescription') }}</label>
-              <Textarea v-model="form.seo_meta.description" :placeholder="t('admin.products.form.seoMetaDescriptionPlaceholder')" class="min-h-[80px]" />
+              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.seoMetaDescription', { lang: getCurrentLangName() }) }}</label>
+              <Textarea v-model="form.seo_meta.description[currentLang]" :placeholder="t('admin.products.form.seoMetaDescriptionPlaceholder')" class="min-h-[80px]" />
               <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.products.form.seoMetaDescriptionTip') }}</p>
             </div>
 
