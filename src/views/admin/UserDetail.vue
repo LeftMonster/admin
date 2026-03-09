@@ -2,7 +2,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { adminAPI } from '@/api/admin'
+import { adminAPI, type AdminWalletAccount, type AdminWalletTransaction } from '@/api/admin'
+import type { AdminUser, AdminOrder, AdminPayment } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -24,7 +25,18 @@ const route = useRoute()
 const adminPath = import.meta.env.VITE_ADMIN_PATH || ''
 const userId = computed(() => Number(route.params.id))
 
-const user = ref<any>(null)
+interface UserDetailCouponUsage {
+  id: number
+  coupon_code?: string
+  coupon_id?: number
+  coupon_type?: string
+  scope_products?: Array<{ title: Record<string, string> }>
+  order_id?: number
+  discount_amount?: number
+  created_at: string
+}
+
+const user = ref<(AdminUser & Record<string, unknown>) | null>(null)
 const userError = ref('')
 
 const activeTab = ref<'orders' | 'payments' | 'coupons' | 'wallet'>('orders')
@@ -35,23 +47,23 @@ const tabs = computed<Array<{ key: 'orders' | 'payments' | 'coupons' | 'wallet';
   { key: 'wallet', label: t('admin.userDetail.tabs.wallet') },
 ])
 
-const orders = ref<any[]>([])
+const orders = ref<AdminOrder[]>([])
 const ordersLoading = ref(false)
 const ordersPagination = ref({ page: 1, page_size: 20, total: 0, total_page: 1 })
 const ordersJumpPage = ref('')
 
-const payments = ref<any[]>([])
+const payments = ref<(AdminPayment & Record<string, unknown>)[]>([])
 const paymentsLoading = ref(false)
 const paymentsPagination = ref({ page: 1, page_size: 20, total: 0, total_page: 1 })
 const paymentsJumpPage = ref('')
 
-const couponUsages = ref<any[]>([])
+const couponUsages = ref<UserDetailCouponUsage[]>([])
 const couponsLoading = ref(false)
 const couponsPagination = ref({ page: 1, page_size: 20, total: 0, total_page: 1 })
 const couponsJumpPage = ref('')
 
-const walletAccount = ref<any>(null)
-const walletTransactions = ref<any[]>([])
+const walletAccount = ref<AdminWalletAccount | null>(null)
+const walletTransactions = ref<AdminWalletTransaction[]>([])
 const walletLoading = ref(false)
 const walletPagination = ref({ page: 1, page_size: 20, total: 0, total_page: 1 })
 const walletJumpPage = ref('')
@@ -79,7 +91,7 @@ const fetchUser = async () => {
 const fetchSiteCurrency = async () => {
   try {
     const response = await adminAPI.getSettings({ key: 'site_config' })
-    const data = response.data?.data as any
+    const data = response.data?.data as Record<string, unknown>
     const raw = String(data?.currency || 'CNY').trim().toUpperCase()
     siteCurrency.value = /^[A-Z]{3}$/.test(raw) ? raw : 'CNY'
   } catch {
@@ -96,7 +108,7 @@ const fetchOrders = async (page = 1) => {
       page_size: ordersPagination.value.page_size,
       user_id: userId.value,
     })
-    orders.value = (response.data.data as any[]) || []
+    orders.value = response.data.data || []
     ordersPagination.value = response.data.pagination || ordersPagination.value
   } finally {
     ordersLoading.value = false
@@ -112,7 +124,7 @@ const fetchPayments = async (page = 1) => {
       page_size: paymentsPagination.value.page_size,
       user_id: userId.value,
     })
-    payments.value = (response.data.data as any[]) || []
+    payments.value = response.data.data || []
     paymentsPagination.value = response.data.pagination || paymentsPagination.value
   } finally {
     paymentsLoading.value = false
@@ -127,7 +139,7 @@ const fetchCoupons = async (page = 1) => {
       page,
       page_size: couponsPagination.value.page_size,
     })
-    couponUsages.value = (response.data.data as any[]) || []
+    couponUsages.value = (response.data.data as UserDetailCouponUsage[]) || []
     couponsPagination.value = response.data.pagination || couponsPagination.value
   } finally {
     couponsLoading.value = false
@@ -148,7 +160,7 @@ const fetchWalletTransactions = async (page = 1) => {
       page,
       page_size: walletPagination.value.page_size,
     })
-    walletTransactions.value = (response.data.data as any[]) || []
+    walletTransactions.value = response.data.data || []
     walletPagination.value = response.data.pagination || walletPagination.value
   } finally {
     walletLoading.value = false
@@ -301,7 +313,7 @@ const formatCouponType = (raw?: string) => {
   return map[raw] || raw
 }
 
-const formatScopeProducts = (products?: any[]) => {
+const formatScopeProducts = (products?: Array<{ title: Record<string, string> }>) => {
   if (!Array.isArray(products) || products.length === 0) return '-'
   const names = products.map((item) => getLocalizedText(item.title)).filter((item) => item)
   if (names.length === 0) return '-'

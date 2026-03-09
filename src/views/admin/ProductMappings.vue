@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminProductMapping, AdminSiteConnection, AdminCategory, AdminProduct, AdminProductSKU } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -9,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { confirmAction } from '@/utils/confirm'
 import { notifyError, notifySuccess } from '@/utils/notify'
 import { getLocalizedText } from '@/utils/format'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 
 const { t } = useI18n()
 const loading = ref(true)
-const mappings = ref<any[]>([])
-const connections = ref<any[]>([])
-const categories = ref<any[]>([])
+const mappings = ref<(AdminProductMapping & { product?: AdminProduct })[]>([])
+const connections = ref<AdminSiteConnection[]>([])
+const categories = ref<AdminCategory[]>([])
 const pagination = reactive({ page: 1, page_size: 20, total: 0, total_page: 1 })
 const jumpPage = ref('')
 const filters = reactive({ connection_id: '__all__' })
@@ -23,13 +25,45 @@ const syncingId = ref<number | null>(null)
 // Expand detail
 const expandedMappingId = ref<number | null>(null)
 const detailLoading = ref(false)
-const detailData = ref<any>(null) // { mapping, sku_mappings }
+
+interface SkuMapping {
+  local_sku_id: number
+  upstream_sku_id: number
+  upstream_price: number
+  upstream_stock: number
+  upstream_is_active: boolean
+}
+
+interface MappingDetail {
+  mapping: AdminProductMapping
+  sku_mappings: SkuMapping[]
+}
+
+interface UpstreamSku {
+  id: number
+  sku_code?: string
+  spec_values?: Record<string, string>
+  price_amount: number | string
+  stock_status: string
+  is_active: boolean
+}
+
+interface UpstreamProduct {
+  id: number
+  title: Record<string, string>
+  price_amount: number | string
+  currency?: string
+  is_active: boolean
+  skus?: UpstreamSku[]
+}
+
+const detailData = ref<MappingDetail | null>(null)
 
 // Import dialog
 const showImportModal = ref(false)
 const importConnectionId = ref('')
 const importCategoryId = ref('__none__')
-const upstreamProducts = ref<any[]>([])
+const upstreamProducts = ref<UpstreamProduct[]>([])
 const loadingUpstream = ref(false)
 const selectedProductIds = ref<Set<number>>(new Set())
 const importExpandedIds = ref<Set<number>>(new Set())
@@ -39,23 +73,23 @@ const normalizeFilterValue = (value: string) => (value === '__all__' ? '' : valu
 
 // --- List helpers ---
 
-const getLocalProductTitle = (mapping: any) => {
+const getLocalProductTitle = (mapping: AdminProductMapping & { product?: AdminProduct }) => {
   if (!mapping.product) return `#${mapping.local_product_id}`
   return getLocalizedText(mapping.product.title)
 }
 
-const getLocalPriceRange = (mapping: any) => {
+const getLocalPriceRange = (mapping: AdminProductMapping & { product?: AdminProduct }) => {
   const p = mapping.product
   if (!p) return '-'
   if (!p.skus || p.skus.length === 0) return p.price_amount || '-'
-  const prices = p.skus.map((s: any) => parseFloat(s.price_amount)).filter((v: number) => !isNaN(v) && v > 0)
+  const prices = p.skus.map((s: AdminProductSKU) => parseFloat(String(s.price_amount))).filter((v: number) => !isNaN(v) && v > 0)
   if (prices.length === 0) return p.price_amount || '-'
   const min = Math.min(...prices)
   const max = Math.max(...prices)
   return min === max ? `${min}` : `${min} ~ ${max}`
 }
 
-const getLocalSkuCount = (mapping: any) => mapping.product?.skus?.length || 0
+const getLocalSkuCount = (mapping: AdminProductMapping & { product?: AdminProduct }) => mapping.product?.skus?.length || 0
 
 const formatTime = (raw?: string) => {
   if (!raw) return '-'
@@ -63,7 +97,7 @@ const formatTime = (raw?: string) => {
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString()
 }
 
-const formatSpecValues = (specValues: any) => {
+const formatSpecValues = (specValues: Record<string, string> | undefined | null) => {
   if (!specValues || typeof specValues !== 'object') return '-'
   const entries = Object.entries(specValues)
   if (entries.length === 0) return '-'
@@ -71,13 +105,13 @@ const formatSpecValues = (specValues: any) => {
 }
 
 const getConnectionName = (connectionId: number) => {
-  const conn = connections.value.find((c: any) => c.id === connectionId)
+  const conn = connections.value.find((c) => c.id === connectionId)
   return conn?.name || `#${connectionId}`
 }
 
 // --- Detail expand ---
 
-const toggleMappingExpand = async (mapping: any) => {
+const toggleMappingExpand = async (mapping: AdminProductMapping & { product?: AdminProduct }) => {
   if (expandedMappingId.value === mapping.id) {
     expandedMappingId.value = null
     detailData.value = null
@@ -98,7 +132,7 @@ const toggleMappingExpand = async (mapping: any) => {
 
 // Build a lookup: local_sku_id -> sku_mapping
 const skuMappingByLocalId = computed(() => {
-  const map: Record<number, any> = {}
+  const map: Record<number, SkuMapping> = {}
   if (detailData.value?.sku_mappings) {
     for (const sm of detailData.value.sku_mappings) {
       map[sm.local_sku_id] = sm
@@ -112,14 +146,14 @@ const skuMappingByLocalId = computed(() => {
 const fetchConnections = async () => {
   try {
     const res = await adminAPI.getSiteConnections({ page_size: 100 })
-    connections.value = (res.data.data as any[]) || []
+    connections.value = res.data.data || []
   } catch { connections.value = [] }
 }
 
 const fetchCategories = async () => {
   try {
     const res = await adminAPI.getCategories()
-    categories.value = (res.data.data as any[]) || []
+    categories.value = res.data.data || []
   } catch { categories.value = [] }
 }
 
@@ -133,8 +167,8 @@ const fetchMappings = async (page = 1) => {
       page, page_size: pagination.page_size,
       connection_id: connId || undefined,
     })
-    mappings.value = (res.data.data as any[]) || []
-    const p = (res.data as any).pagination
+    mappings.value = (res.data.data as (AdminProductMapping & { product?: AdminProduct })[]) || []
+    const p = res.data.pagination
     if (p) { pagination.page = p.page; pagination.page_size = p.page_size; pagination.total = p.total; pagination.total_page = p.total_page }
   } catch { mappings.value = [] } finally { loading.value = false }
 }
@@ -153,7 +187,7 @@ const handleFilterChange = () => fetchMappings(1)
 
 // --- Actions ---
 
-const handleSync = async (mapping: any) => {
+const handleSync = async (mapping: AdminProductMapping) => {
   syncingId.value = mapping.id
   try {
     await adminAPI.syncProductMapping(mapping.id)
@@ -164,7 +198,7 @@ const handleSync = async (mapping: any) => {
   } finally { syncingId.value = null }
 }
 
-const handleToggleStatus = async (mapping: any) => {
+const handleToggleStatus = async (mapping: AdminProductMapping) => {
   try {
     await adminAPI.updateProductMappingStatus(mapping.id, { is_active: !mapping.is_active })
     fetchMappings(pagination.page)
@@ -172,7 +206,7 @@ const handleToggleStatus = async (mapping: any) => {
   } catch (err: any) { notifyError(err?.response?.data?.message || err?.message) }
 }
 
-const handleDelete = async (mapping: any) => {
+const handleDelete = async (mapping: AdminProductMapping) => {
   const confirmed = await confirmAction({
     description: t('productMappings.delete.confirm', { id: mapping.id }),
     confirmText: t('admin.common.delete'),
@@ -190,13 +224,13 @@ const handleDelete = async (mapping: any) => {
 
 const allSelected = computed(() => {
   if (upstreamProducts.value.length === 0) return false
-  return upstreamProducts.value.every((p: any) => selectedProductIds.value.has(p.id))
+  return upstreamProducts.value.every((p) => selectedProductIds.value.has(p.id))
 })
 
 const toggleSelectAll = () => {
   selectedProductIds.value = allSelected.value
     ? new Set()
-    : new Set(upstreamProducts.value.map((p: any) => p.id))
+    : new Set(upstreamProducts.value.map((p) => p.id))
 }
 
 const toggleProduct = (id: number) => {
@@ -211,28 +245,28 @@ const toggleImportExpand = (id: number) => {
   importExpandedIds.value = next
 }
 
-const getSkuPriceRange = (product: any) => {
+const getSkuPriceRange = (product: UpstreamProduct) => {
   if (!product.skus || product.skus.length === 0) return product.price_amount || '-'
-  const prices = product.skus.map((s: any) => parseFloat(s.price_amount)).filter((p: number) => !isNaN(p) && p > 0)
+  const prices = product.skus.map((s) => parseFloat(String(s.price_amount))).filter((p: number) => !isNaN(p) && p > 0)
   if (prices.length === 0) return product.price_amount || '-'
   const min = Math.min(...prices)
   const max = Math.max(...prices)
   return min === max ? `${min}` : `${min} ~ ${max}`
 }
 
-const getSkuStockSummary = (product: any) => {
+const getSkuStockSummary = (product: UpstreamProduct) => {
   if (!product.skus || product.skus.length === 0) return '-'
   const total = product.skus.length
-  const inStock = product.skus.filter((s: any) => s.stock_status === 'in_stock').length
+  const inStock = product.skus.filter((s) => s.stock_status === 'in_stock').length
   if (inStock === total) return t('productMappings.import.stockAllInStock')
   if (inStock === 0) return t('productMappings.import.stockAllOutOfStock')
   return t('productMappings.import.stockPartial', { inStock, total })
 }
 
-const getSkuStockClass = (product: any) => {
+const getSkuStockClass = (product: UpstreamProduct) => {
   if (!product.skus || product.skus.length === 0) return 'text-muted-foreground'
   const total = product.skus.length
-  const inStock = product.skus.filter((s: any) => s.stock_status === 'in_stock').length
+  const inStock = product.skus.filter((s) => s.stock_status === 'in_stock').length
   if (inStock === total) return 'text-emerald-600'
   if (inStock === 0) return 'text-red-500'
   return 'text-amber-600'
@@ -254,8 +288,8 @@ const fetchUpstreamProducts = async (connectionId: string) => {
   loadingUpstream.value = true
   try {
     const res = await adminAPI.getUpstreamProducts({ connection_id: connectionId, page_size: 200 })
-    const data = res.data.data as any
-    upstreamProducts.value = (Array.isArray(data) ? data : data?.items) || []
+    const data = res.data.data as UpstreamProduct[] | { items?: UpstreamProduct[] } | null
+    upstreamProducts.value = (Array.isArray(data) ? data : (data as { items?: UpstreamProduct[] })?.items) || []
   } catch { upstreamProducts.value = [] } finally { loadingUpstream.value = false }
 }
 
@@ -279,9 +313,9 @@ const handleBatchImport = async () => {
         upstream_product_ids: ids,
         category_id: categoryId || undefined,
       })
-      const result = res.data.data as any
-      results = result.results || []
-      successCount = result.success_count || 0
+      const result = res.data.data as { results?: typeof results; success_count?: number } | null
+      results = result?.results || []
+      successCount = result?.success_count || 0
     } catch (batchErr: any) {
       if (batchErr?.response?.status === 404) {
         for (const id of ids) {
@@ -300,7 +334,7 @@ const handleBatchImport = async () => {
     } else {
       const failed = results.filter((r) => !r.success)
       const failedDetails = failed.map((r) => {
-        const prod = upstreamProducts.value.find((p: any) => p.id === r.upstream_product_id)
+        const prod = upstreamProducts.value.find((p) => p.id === r.upstream_product_id)
         const name = prod ? getLocalizedText(prod.title) : `#${r.upstream_product_id}`
         return `${name}: ${r.error || t('productMappings.import.unknownError')}`
       }).join('\n')
@@ -340,8 +374,8 @@ onMounted(() => { fetchConnections(); fetchCategories(); fetchMappings() })
 
     <!-- Mapping list -->
     <div class="space-y-3">
-      <div v-if="loading" class="rounded-xl border border-border bg-card px-6 py-12 text-center text-muted-foreground">
-        {{ t('admin.common.loading') }}
+      <div v-if="loading" class="rounded-xl border border-border bg-card overflow-hidden">
+        <TableSkeleton :columns="5" :rows="5" />
       </div>
       <div v-else-if="mappings.length === 0" class="rounded-xl border border-border bg-card px-6 py-12 text-center text-muted-foreground">
         {{ t('productMappings.empty') }}

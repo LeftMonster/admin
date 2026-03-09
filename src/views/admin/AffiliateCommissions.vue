@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminAffiliateCommission } from '@/api/types'
 import {
   AFFILIATE_COMMISSION_STATUS_AVAILABLE,
   AFFILIATE_COMMISSION_STATUS_PENDING_CONFIRM,
@@ -12,12 +14,13 @@ import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDate } from '@/utils/format'
 
 const { t } = useI18n()
 const loading = ref(true)
-const rows = ref<any[]>([])
+const rows = ref<AdminAffiliateCommission[]>([])
 const jumpPage = ref('')
 const pagination = ref({
   page: 1,
@@ -46,7 +49,7 @@ const fetchRows = async (page = 1) => {
       affiliate_profile_id: filters.affiliateProfileId || undefined,
       status: normalizeFilterValue(filters.status) || undefined,
     })
-    rows.value = (response.data.data as any[]) || []
+    rows.value = response.data.data || []
     pagination.value = response.data.pagination || pagination.value
   } catch {
     rows.value = []
@@ -58,6 +61,7 @@ const fetchRows = async (page = 1) => {
 const handleSearch = () => {
   fetchRows(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const refreshCurrentPage = () => {
   fetchRows(pagination.value.page)
@@ -107,13 +111,13 @@ onMounted(() => {
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="w-full md:w-56">
-          <Input v-model="filters.keyword" :placeholder="t('admin.affiliatesCommissions.filters.keyword')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.keyword" :placeholder="t('admin.affiliatesCommissions.filters.keyword')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-52">
-          <Input v-model="filters.orderNo" :placeholder="t('admin.affiliatesCommissions.filters.orderNo')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.orderNo" :placeholder="t('admin.affiliatesCommissions.filters.orderNo')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-44">
-          <Input v-model="filters.affiliateProfileId" :placeholder="t('admin.affiliatesCommissions.filters.profileId')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.affiliateProfileId" :placeholder="t('admin.affiliatesCommissions.filters.profileId')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-48">
           <Select v-model="filters.status" @update:modelValue="handleSearch">
@@ -152,7 +156,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="10" class="p-0">
+              <TableSkeleton :columns="10" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="rows.length === 0">
             <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.affiliatesCommissions.empty') }}</TableCell>

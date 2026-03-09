@@ -18,7 +18,7 @@ const passwordForm = reactive({
 
 const notifyErrorIfNeeded = (err: unknown, fallback: string) => {
   if (err && typeof err === 'object' && 'response' in err) {
-    const res = (err as any).response
+    const res = (err as { response?: { data?: { message?: string } } }).response
     if (res?.data?.message) {
       notifyError(res.data.message)
       return

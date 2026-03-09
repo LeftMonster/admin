@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminUserLoginLog } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { formatDate, toRFC3339 } from '@/utils/format'
 
 const { t } = useI18n()
 const loading = ref(true)
-const logs = ref<any[]>([])
+const logs = ref<AdminUserLoginLog[]>([])
 const adminPath = import.meta.env.VITE_ADMIN_PATH || ''
 const pagination = ref({
   page: 1,
@@ -59,7 +62,7 @@ const fetchLogs = async (page = 1) => {
       created_from: toRFC3339(filters.createdFrom),
       created_to: toRFC3339(filters.createdTo),
     })
-    logs.value = (response.data.data as any[]) || []
+    logs.value = response.data.data || []
     pagination.value = response.data.pagination || pagination.value
   } catch {
     logs.value = []
@@ -71,6 +74,7 @@ const fetchLogs = async (page = 1) => {
 const handleSearch = () => {
   fetchLogs(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const refresh = () => {
   fetchLogs(pagination.value.page)
@@ -126,7 +130,7 @@ onMounted(() => {
             type="number"
             min="1"
             :placeholder="t('admin.userLoginLogs.filterUserId')"
-            @update:modelValue="handleSearch"
+            @update:modelValue="debouncedSearch"
           />
         </div>
         <div class="w-full md:w-48">
@@ -134,7 +138,7 @@ onMounted(() => {
             v-model="filters.email"
             type="text"
             :placeholder="t('admin.userLoginLogs.filterEmail')"
-            @update:modelValue="handleSearch"
+            @update:modelValue="debouncedSearch"
           />
         </div>
         <div class="w-full md:w-36">
@@ -142,7 +146,7 @@ onMounted(() => {
             v-model="filters.clientIp"
             type="text"
             :placeholder="t('admin.userLoginLogs.filterClientIp')"
-            @update:modelValue="handleSearch"
+            @update:modelValue="debouncedSearch"
           />
         </div>
         <div class="w-full md:w-40">
@@ -206,7 +210,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="7" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="7" class="p-0">
+              <TableSkeleton :columns="7" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="logs.length === 0">
             <TableCell colspan="7" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.userLoginLogs.empty') }}</TableCell>

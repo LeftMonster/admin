@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminAffiliateUser } from '@/api/types'
 import { AFFILIATE_PROFILE_STATUS_ACTIVE, AFFILIATE_PROFILE_STATUS_DISABLED } from '@/constants/affiliate'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDate } from '@/utils/format'
 import { confirmAction } from '@/utils/confirm'
@@ -15,7 +18,7 @@ import { notifyError, notifySuccess } from '@/utils/notify'
 const { t } = useI18n()
 const loading = ref(true)
 const operatingProfileID = ref<number | null>(null)
-const rows = ref<any[]>([])
+const rows = ref<Record<string, unknown>[]>([])
 const selectedIds = ref<number[]>([])
 const jumpPage = ref('')
 const pagination = ref({
@@ -38,7 +41,7 @@ const parseNumber = (value: unknown, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-const pickStatAmount = (stats: any, camelKey: string, snakeKey: string) => {
+const pickStatAmount = (stats: Record<string, unknown> | undefined, camelKey: string, snakeKey: string) => {
   const value = stats?.[snakeKey] ?? stats?.[camelKey]
   if (value === null || value === undefined || value === '') {
     return '0.00'
@@ -46,11 +49,11 @@ const pickStatAmount = (stats: any, camelKey: string, snakeKey: string) => {
   return String(value)
 }
 
-const pickStatNumber = (stats: any, camelKey: string, snakeKey: string) => {
+const pickStatNumber = (stats: Record<string, unknown> | undefined, camelKey: string, snakeKey: string) => {
   return parseNumber(stats?.[snakeKey] ?? stats?.[camelKey], 0)
 }
 
-const conversionRateText = (stats: any) => {
+const conversionRateText = (stats: Record<string, unknown> | undefined) => {
   const value = pickStatNumber(stats, 'ConversionRate', 'conversion_rate')
   return `${value.toFixed(2)}%`
 }
@@ -65,7 +68,7 @@ const fetchRows = async (page = 1) => {
       code: filters.code || undefined,
       status: normalizeFilterValue(filters.status) || undefined,
     })
-    rows.value = (response.data.data as any[]) || []
+    rows.value = (response.data.data as Record<string, unknown>[]) || []
     const currentIDs = new Set(
       rows.value
         .map((item) => resolveProfileID(item))
@@ -84,6 +87,7 @@ const fetchRows = async (page = 1) => {
 const handleSearch = () => {
   fetchRows(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const refreshCurrentPage = () => {
   fetchRows(pagination.value.page)
@@ -115,9 +119,9 @@ const statusClass = (status?: string) => {
   return 'border-border bg-muted/30 text-muted-foreground'
 }
 
-const resolveProfileID = (row: any) => Number(row?.profile?.id || row?.id || 0)
-const resolveProfileStatus = (row: any) => String(row?.profile?.status || row?.status || '').trim()
-const canToggleStatus = (row: any) => resolveProfileID(row) > 0
+const resolveProfileID = (row: Record<string, unknown>) => Number((row?.profile as Record<string, unknown>)?.id || row?.id || 0)
+const resolveProfileStatus = (row: Record<string, unknown>) => String((row?.profile as Record<string, unknown>)?.status || row?.status || '').trim()
+const canToggleStatus = (row: Record<string, unknown>) => resolveProfileID(row) > 0
 const allSelected = computed(() => {
   if (rows.value.length === 0) return false
   return rows.value.every((item) => {
@@ -136,7 +140,7 @@ const toggleSelectAll = () => {
     .filter((id) => id > 0)
 }
 
-const toggleProfileStatus = async (row: any) => {
+const toggleProfileStatus = async (row: Record<string, unknown>) => {
   const profileID = resolveProfileID(row)
   if (profileID <= 0) return
   const currentStatus = resolveProfileStatus(row)
@@ -215,10 +219,10 @@ onMounted(() => {
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="w-full md:w-56">
-          <Input v-model="filters.keyword" :placeholder="t('admin.affiliatesUsers.filters.keyword')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.keyword" :placeholder="t('admin.affiliatesUsers.filters.keyword')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-44">
-          <Input v-model="filters.code" :placeholder="t('admin.affiliatesUsers.filters.code')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.code" :placeholder="t('admin.affiliatesUsers.filters.code')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-44">
           <Select v-model="filters.status" @update:modelValue="handleSearch">
@@ -278,7 +282,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="13" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="13" class="p-0">
+              <TableSkeleton :columns="13" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="rows.length === 0">
             <TableCell colspan="13" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.affiliatesUsers.empty') }}</TableCell>

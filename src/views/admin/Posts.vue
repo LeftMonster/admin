@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { adminAPI } from '@/api/admin'
+import type { AdminPost } from '@/api/types'
 import RichEditor from '@/components/RichEditor.vue'
 import IdCell from '@/components/IdCell.vue'
 import { getImageUrl } from '@/utils/image'
@@ -12,9 +13,11 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { notifyError } from '@/utils/notify'
 import { confirmAction } from '@/utils/confirm'
+import { useFormValidation, rules } from '@/composables/useFormValidation'
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -24,6 +27,7 @@ const isEditing = ref(false)
 const currentTab = ref('blog')
 const fileInput = ref<HTMLInputElement | null>(null)
 const currentLang = ref('zh-CN')
+const submitting = ref(false)
 const route = useRoute()
 
 const languages = computed(() => [
@@ -32,7 +36,7 @@ const languages = computed(() => [
   { code: 'en-US', name: t('admin.common.lang.enUS') },
 ])
 
-const posts = ref<any[]>([])
+const posts = ref<AdminPost[]>([])
 const pagination = reactive({
   page: 1,
   page_size: 10,
@@ -43,13 +47,19 @@ const jumpPage = ref('')
 
 const form = reactive({
   id: 0,
-  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
+  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<string, string>,
   slug: '',
-  summary: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
-  content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
+  summary: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<string, string>,
+  content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as Record<string, string>,
   type: 'blog',
   thumbnail: '',
   is_published: true,
+})
+
+const { errors, validate, clearErrors } = useFormValidation({
+  slug: [rules.required('This field is required')],
+  type: [rules.required('This field is required')],
+  title: [rules.required('This field is required')],
 })
 
 const getCurrentLangName = () => {
@@ -64,7 +74,7 @@ const fetchPosts = async () => {
       page_size: pagination.page_size,
       type: currentTab.value,
     })
-    posts.value = (res.data.data as any[]) || []
+    posts.value = res.data.data || []
     if (res.data.pagination) {
       Object.assign(pagination, res.data.pagination)
     }
@@ -92,6 +102,7 @@ const jumpToPage = () => {
 const openCreateModal = () => {
   isEditing.value = false
   currentLang.value = 'zh-CN'
+  clearErrors()
   Object.assign(form, {
     id: 0,
     title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
@@ -105,7 +116,7 @@ const openCreateModal = () => {
   showModal.value = true
 }
 
-const openEditModal = (post: any) => {
+const openEditModal = (post: AdminPost) => {
   isEditing.value = true
   currentLang.value = 'zh-CN'
   Object.assign(form, {
@@ -123,9 +134,12 @@ const openEditModal = (post: any) => {
 
 const closeModal = () => {
   showModal.value = false
+  clearErrors()
 }
 
 const handleSubmit = async () => {
+  if (!validate({ slug: form.slug, type: form.type, title: form.title['zh-CN'] } as Record<string, unknown>)) return
+  submitting.value = true
   try {
     const payload = { ...form }
     if (isEditing.value) {
@@ -136,18 +150,20 @@ const handleSubmit = async () => {
     closeModal()
     fetchPosts()
   } catch (err) {
-    notifyError(t('admin.posts.errors.operationFailed', { message: (err as any).message || '' }))
+    notifyError(t('admin.posts.errors.operationFailed', { message: (err as Error).message || '' }))
+  } finally {
+    submitting.value = false
   }
 }
 
-const handleDelete = async (post: any) => {
+const handleDelete = async (post: AdminPost) => {
   const confirmed = await confirmAction({ description: t('admin.posts.confirmDelete', { name: getLocalizedText(post.title) }), confirmText: t('admin.common.delete'), variant: 'destructive' })
   if (!confirmed) return
   try {
     await adminAPI.deletePost(post.id)
     fetchPosts()
   } catch (err) {
-    notifyError(t('admin.posts.errors.deleteFailed', { message: (err as any).message || '' }))
+    notifyError(t('admin.posts.errors.deleteFailed', { message: (err as Error).message || '' }))
   }
 }
 
@@ -156,9 +172,9 @@ const openEditById = async (rawId: unknown) => {
   if (!Number.isFinite(id) || id <= 0) return
   try {
     const res = await adminAPI.getPost(id)
-    openEditModal(res.data.data as any)
+    openEditModal(res.data.data)
   } catch (err) {
-    notifyError(t('admin.posts.errors.operationFailed', { message: (err as any).message || '' }))
+    notifyError(t('admin.posts.errors.operationFailed', { message: (err as Error).message || '' }))
   }
 }
 
@@ -172,7 +188,7 @@ const handleFileChange = async (e: Event) => {
     formData.append('file', file)
 		try {
 			const res = await adminAPI.upload(formData, 'post')
-			form.thumbnail = (res.data.data as any)?.url || ''
+			form.thumbnail = (res.data.data as Record<string, string>)?.url || ''
     } catch {
       notifyError(t('admin.posts.errors.uploadFailed'))
     } finally {
@@ -236,7 +252,9 @@ watch(
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="6" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="6" class="p-0">
+              <TableSkeleton :columns="6" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="posts.length === 0">
             <TableCell colspan="6" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.posts.empty') }}</TableCell>
@@ -351,12 +369,14 @@ watch(
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">
                 {{ t('admin.posts.form.title', { lang: getCurrentLangName() }) }}
               </label>
-              <Input v-model="form.title[currentLang]" required />
+              <Input v-model="form.title[currentLang]" />
+              <p v-if="errors.title" class="text-xs text-destructive mt-1">{{ errors.title }}</p>
             </div>
 
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.posts.form.slug') }}</label>
-              <Input v-model="form.slug" required :placeholder="t('admin.posts.form.slugPlaceholder')" />
+              <Input v-model="form.slug" :placeholder="t('admin.posts.form.slugPlaceholder')" />
+              <p v-if="errors.slug" class="text-xs text-destructive mt-1">{{ errors.slug }}</p>
             </div>
 
             <div>
@@ -370,6 +390,7 @@ watch(
                   <SelectItem value="notice">{{ t('admin.posts.form.typeNotice') }}</SelectItem>
                 </SelectContent>
               </Select>
+              <p v-if="errors.type" class="text-xs text-destructive mt-1">{{ errors.type }}</p>
             </div>
 
             <div class="col-span-2">
@@ -412,7 +433,7 @@ watch(
 
           <div class="flex justify-end gap-3 border-t border-border pt-6">
             <Button type="button" variant="outline" @click="closeModal">{{ t('admin.common.cancel') }}</Button>
-            <Button type="submit">
+            <Button type="submit" :disabled="submitting">
               {{ isEditing ? t('admin.posts.actions.saveChanges') : t('admin.posts.actions.publishNow') }}
             </Button>
           </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { adminAPI } from '@/api/admin'
+import { adminAPI, type AdminAffiliateSetting } from '@/api/admin'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -52,7 +52,7 @@ const fetchSettings = async () => {
   try {
     const res = await adminAPI.getAffiliateSettings()
     if (res.data && res.data.data) {
-      const data = res.data.data as any
+      const data = res.data.data as AdminAffiliateSetting
       form.enabled = Boolean(data.enabled)
       form.commission_rate = clampNumber(data.commission_rate, 0, 100, 0)
       form.confirm_days = clampNumber(data.confirm_days, 0, 3650, 0)
@@ -77,7 +77,7 @@ const saveSettings = async () => {
       withdraw_channels: splitChannels(form.withdraw_channels_text),
     }
     const response = await adminAPI.updateAffiliateSettings(payload)
-    const data = response.data?.data as any
+    const data = response.data?.data as AdminAffiliateSetting | undefined
     if (data) {
       form.enabled = Boolean(data.enabled)
       form.commission_rate = clampNumber(data.commission_rate, 0, 100, payload.commission_rate)

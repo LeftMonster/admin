@@ -2,18 +2,20 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminReconciliationJob, AdminReconciliationItem, AdminSiteConnection } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { notifyError, notifySuccess } from '@/utils/notify'
 
 const { t } = useI18n()
 const loading = ref(true)
-const jobs = ref<any[]>([])
+const jobs = ref<(AdminReconciliationJob & Record<string, unknown>)[]>([])
 const pagination = reactive({
   page: 1,
   page_size: 20,
@@ -29,14 +31,14 @@ const filters = reactive({
 })
 
 // 站点连接列表
-const connections = ref<any[]>([])
+const connections = ref<AdminSiteConnection[]>([])
 const loadingConnections = ref(false)
 
 const fetchConnections = async () => {
   loadingConnections.value = true
   try {
     const res = await adminAPI.getSiteConnections({ page: 1, page_size: 200 })
-    connections.value = (res.data.data as any[]) || []
+    connections.value = res.data.data || []
   } catch {
     connections.value = []
   } finally {
@@ -77,8 +79,8 @@ const submitting = ref(false)
 
 // Detail dialog
 const showDetail = ref(false)
-const detailJob = ref<any>(null)
-const detailItems = ref<any[]>([])
+const detailJob = ref<(AdminReconciliationJob & Record<string, unknown>) | null>(null)
+const detailItems = ref<(AdminReconciliationItem & Record<string, unknown>)[]>([])
 const detailItemsTotal = ref(0)
 const detailItemsPage = ref(1)
 
@@ -91,14 +93,14 @@ const resolving = ref(false)
 const fetchJobs = async (page = 1) => {
   loading.value = true
   try {
-    const params: any = { page, page_size: pagination.page_size }
+    const params: Record<string, unknown> = { page, page_size: pagination.page_size }
     if (filters.status && filters.status !== '__all__') params.status = filters.status
     if (filters.type && filters.type !== '__all__') params.type = filters.type
     if (filters.connection_id && filters.connection_id !== '__all__') params.connection_id = filters.connection_id
 
     const res = await adminAPI.getReconciliationJobs(params)
-    jobs.value = (res.data.data as any[]) || []
-    const p = (res.data as any).pagination
+    jobs.value = res.data.data || []
+    const p = res.data.pagination
     if (p) {
       pagination.page = p.page
       pagination.page_size = p.page_size
@@ -153,16 +155,16 @@ const handleNewJob = async () => {
   }
 }
 
-const openDetail = async (job: any) => {
+const openDetail = async (job: AdminReconciliationJob) => {
   try {
     const res = await adminAPI.getReconciliationJob(job.id, { items_page: 1, items_page_size: 20 })
-    const data = res.data.data as any
-    detailJob.value = data.job || job
-    detailItems.value = data.items || []
-    detailItemsTotal.value = data.items_total || 0
+    const data = res.data.data as Record<string, unknown>
+    detailJob.value = (data.job || job) as AdminReconciliationJob & Record<string, unknown>
+    detailItems.value = (data.items as (AdminReconciliationItem & Record<string, unknown>)[]) || []
+    detailItemsTotal.value = (data.items_total as number) || 0
     detailItemsPage.value = 1
   } catch {
-    detailJob.value = job
+    detailJob.value = job as AdminReconciliationJob & Record<string, unknown>
     detailItems.value = []
     detailItemsTotal.value = 0
   }
@@ -173,9 +175,9 @@ const loadDetailItems = async (page: number) => {
   if (!detailJob.value) return
   try {
     const res = await adminAPI.getReconciliationJob(detailJob.value.id, { items_page: page, items_page_size: 20 })
-    const data = res.data.data as any
-    detailItems.value = data.items || []
-    detailItemsTotal.value = data.items_total || 0
+    const data = res.data.data as Record<string, unknown>
+    detailItems.value = (data.items as (AdminReconciliationItem & Record<string, unknown>)[]) || []
+    detailItemsTotal.value = (data.items_total as number) || 0
     detailItemsPage.value = page
   } catch {
     // keep current items
@@ -188,7 +190,7 @@ const closeDetail = () => {
   detailItems.value = []
 }
 
-const openResolve = (item: any) => {
+const openResolve = (item: AdminReconciliationItem & Record<string, unknown>) => {
   resolveItemId.value = item.id
   resolveRemark.value = ''
   showResolve.value = true
@@ -324,7 +326,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="10" class="p-0">
+              <TableSkeleton :columns="10" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="jobs.length === 0">
             <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('reconciliation.empty') }}</TableCell>

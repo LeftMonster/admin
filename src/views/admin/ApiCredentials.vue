@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useDebounceFn } from '@vueuse/core'
 import { adminAPI } from '@/api/admin'
+import type { AdminApiCredential } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +18,7 @@ import { notifyError, notifySuccess } from '@/utils/notify'
 
 const { t } = useI18n()
 const loading = ref(true)
-const credentials = ref<any[]>([])
+const credentials = ref<AdminApiCredential[]>([])
 const pagination = reactive({
   page: 1,
   page_size: 20,
@@ -36,7 +39,7 @@ const statusOptions = [
 
 // Detail dialog
 const showDetail = ref(false)
-const detailCred = ref<any>(null)
+const detailCred = ref<AdminApiCredential | null>(null)
 
 // Reject dialog
 const showReject = ref(false)
@@ -46,11 +49,11 @@ const rejectReason = ref('')
 const fetchCredentials = async (page = 1) => {
   loading.value = true
   try {
-    const params: any = { page, page_size: pagination.page_size }
+    const params: Record<string, unknown> = { page, page_size: pagination.page_size }
     if (filterStatus.value && filterStatus.value !== '__all__') params.status = filterStatus.value
     if (searchQuery.value.trim()) params.search = searchQuery.value.trim()
     const res = await adminAPI.getApiCredentials(params)
-    credentials.value = (Array.isArray(res.data?.data) ? res.data.data : []) as any[]
+    credentials.value = Array.isArray(res.data?.data) ? res.data.data : []
     const pg = res.data?.pagination
     if (pg) {
       pagination.page = pg.page
@@ -65,6 +68,11 @@ const fetchCredentials = async (page = 1) => {
   }
 }
 
+const handleSearch = () => {
+  fetchCredentials(1)
+}
+const debouncedSearch = useDebounceFn(handleSearch, 300)
+
 const statusVariant = (status: string) => {
   switch (status) {
     case 'approved': return 'default'
@@ -76,7 +84,7 @@ const statusVariant = (status: string) => {
 
 const formatDate = (d: string) => d ? new Date(d).toLocaleString() : '-'
 
-const openDetail = (cred: any) => {
+const openDetail = (cred: AdminApiCredential) => {
   detailCred.value = cred
   showDetail.value = true
 }
@@ -111,7 +119,7 @@ const handleReject = async () => {
   }
 }
 
-const handleToggle = async (cred: any) => {
+const handleToggle = async (cred: AdminApiCredential) => {
   const msg = cred.is_active
     ? t('apiCredentials.toggle.disableConfirm')
     : t('apiCredentials.toggle.enableConfirm')
@@ -176,9 +184,10 @@ onMounted(() => fetchCredentials())
         v-model="searchQuery"
         class="w-[240px]"
         :placeholder="t('apiCredentials.filters.searchPlaceholder')"
-        @keyup.enter="fetchCredentials(1)"
+        @update:modelValue="debouncedSearch"
+        @keyup.enter="handleSearch"
       />
-      <Button size="sm" variant="outline" @click="fetchCredentials(1)">
+      <Button size="sm" variant="outline" @click="handleSearch">
         {{ t('apiCredentials.filters.search') }}
       </Button>
     </div>
@@ -200,7 +209,9 @@ onMounted(() => fetchCredentials())
         </TableHeader>
         <TableBody>
           <TableRow v-if="loading">
-            <TableCell :colspan="8" class="text-center py-8 text-muted-foreground">Loading...</TableCell>
+            <TableCell :colspan="8" class="p-0">
+              <TableSkeleton :columns="8" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="credentials.length === 0">
             <TableCell :colspan="8" class="text-center py-8 text-muted-foreground">{{ t('apiCredentials.empty') }}</TableCell>

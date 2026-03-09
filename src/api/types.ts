@@ -9,3 +9,487 @@ export interface ApiResponse<T = unknown> {
     total_page: number
   }
 }
+
+// --- Localized JSON (multi-language content) ---
+export type LocalizedText = Record<string, string>
+
+// --- Category ---
+export interface AdminCategory {
+  id: number
+  slug: string
+  name: LocalizedText
+  icon: string
+  sort_order: number
+  created_at: string
+}
+
+// --- Product ---
+export interface AdminProductSKU {
+  id: number
+  product_id: number
+  sku_code: string
+  spec_values: Record<string, string>
+  price_amount: number
+  manual_stock_total: number
+  manual_stock_locked: number
+  manual_stock_sold: number
+  auto_stock_available: number
+  auto_stock_total: number
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminProduct {
+  id: number
+  category_id: number
+  slug: string
+  seo_meta: Record<string, LocalizedText>
+  title: LocalizedText
+  description: LocalizedText
+  content: LocalizedText
+  price_amount: number
+  images: string[]
+  tags: string[]
+  purchase_type: string
+  fulfillment_type: string
+  manual_form_schema: Record<string, unknown> | null
+  manual_stock_total: number
+  manual_stock_locked: number
+  manual_stock_sold: number
+  is_affiliate_enabled: boolean
+  auto_stock_available: number
+  auto_stock_total: number
+  auto_stock_locked: number
+  auto_stock_sold: number
+  is_mapped: boolean
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+  category?: AdminCategory
+  skus?: AdminProductSKU[]
+}
+
+// --- Order ---
+export interface AdminOrderItem {
+  id: number
+  order_id: number
+  product_id: number
+  sku_id: number
+  product_title: LocalizedText
+  sku_spec_values: Record<string, string>
+  quantity: number
+  unit_price: number
+  total_price: number
+  fulfillment_type: string
+  created_at: string
+}
+
+export interface AdminFulfillment {
+  id: number
+  order_id: number
+  type: string
+  status: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminOrder {
+  id: number
+  order_no: string
+  parent_id?: number
+  user_id: number
+  guest_email?: string
+  guest_locale?: string
+  status: string
+  currency: string
+  original_amount: number
+  discount_amount: number
+  promotion_discount_amount: number
+  total_amount: number
+  wallet_paid_amount: number
+  online_paid_amount: number
+  refunded_amount: number
+  coupon_id?: number
+  promotion_id?: number
+  affiliate_profile_id?: number
+  affiliate_code?: string
+  client_ip?: string
+  expires_at?: string
+  paid_at?: string
+  canceled_at?: string
+  created_at: string
+  updated_at: string
+  items?: AdminOrderItem[]
+  fulfillment?: AdminFulfillment
+  children?: AdminOrder[]
+}
+
+// --- CardSecret ---
+export interface AdminCardSecretBatch {
+  id: number
+  product_id: number
+  sku_id: number
+  name: string
+  total_count: number
+  available_count: number
+  used_count: number
+  created_at: string
+}
+
+export interface AdminCardSecret {
+  id: number
+  product_id: number
+  sku_id: number
+  batch_id?: number
+  secret: string
+  status: string
+  order_id?: number
+  reserved_at?: string
+  used_at?: string
+  created_at: string
+  updated_at: string
+  batch?: AdminCardSecretBatch
+}
+
+// --- Coupon ---
+export interface AdminCoupon {
+  id: number
+  code: string
+  type: string
+  value: number
+  min_amount: number
+  max_discount: number
+  usage_limit: number
+  used_count: number
+  per_user_limit: number
+  scope_type: string
+  scope_ref_ids: string
+  starts_at?: string
+  ends_at?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// --- GiftCard ---
+export interface AdminGiftCard {
+  id: number
+  batch_id?: number
+  name: string
+  code: string
+  amount: number
+  currency: string
+  status: string
+  expires_at?: string
+  redeemed_at?: string
+  redeemed_user_id?: number
+  wallet_txn_id?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminGiftCardBatch {
+  id: number
+  name: string
+  total_count: number
+  amount: number
+  currency: string
+  created_at: string
+}
+
+// --- Promotion ---
+export interface AdminPromotion {
+  id: number
+  name: string
+  scope_type: string
+  scope_ref_id: number
+  type: string
+  value: number
+  min_amount: number
+  starts_at?: string
+  ends_at?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// --- Banner ---
+export interface AdminBanner {
+  id: number
+  name: string
+  position: string
+  title: LocalizedText
+  subtitle: LocalizedText
+  image: string
+  mobile_image: string
+  link_type: string
+  link_value: string
+  open_in_new_tab: boolean
+  is_active: boolean
+  start_at?: string
+  end_at?: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+// --- Post ---
+export interface AdminPost {
+  id: number
+  slug: string
+  type: string
+  title: LocalizedText
+  summary: LocalizedText
+  content: LocalizedText
+  thumbnail: string
+  is_published: boolean
+  published_at?: string
+  created_at: string
+}
+
+// --- PaymentChannel ---
+export interface AdminPaymentChannel {
+  id: number
+  name: string
+  provider_type: string
+  channel_type: string
+  interaction_mode: string
+  fee_rate: number
+  config_json: Record<string, unknown>
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+// --- Payment ---
+export interface AdminPayment {
+  id: number
+  payment_no: string
+  order_id: number
+  channel_id: number
+  provider_type: string
+  channel_type: string
+  interaction_mode: string
+  amount: number
+  payable_amount: number
+  fee_rate: number
+  fee_amount: number
+  currency: string
+  status: string
+  provider_trade_no?: string
+  paid_at?: string
+  expired_at?: string
+  created_at: string
+  updated_at: string
+  order_no?: string
+  channel_name?: string
+}
+
+// --- User ---
+export interface AdminUser {
+  id: number
+  email: string
+  display_name: string
+  locale: string
+  status: string
+  email_verified_at?: string
+  last_login_at?: string
+  created_at: string
+  updated_at: string
+}
+
+// --- UserLoginLog ---
+export interface AdminUserLoginLog {
+  id: number
+  user_id: number
+  email: string
+  client_ip: string
+  user_agent: string
+  status: string
+  fail_reason?: string
+  created_at: string
+}
+
+// --- SiteConnection ---
+export interface AdminSiteConnection {
+  id: number
+  name: string
+  type: string
+  base_url: string
+  api_key: string
+  is_active: boolean
+  last_ping_at?: string
+  last_ping_status?: string
+  created_at: string
+  updated_at: string
+}
+
+// --- ProductMapping ---
+export interface AdminProductMapping {
+  id: number
+  connection_id: number
+  local_product_id: number
+  upstream_product_id: number
+  upstream_sku_id: number
+  upstream_product_name: string
+  upstream_sku_name: string
+  upstream_price: number
+  upstream_currency: string
+  is_active: boolean
+  last_sync_at?: string
+  created_at: string
+  updated_at: string
+  connection_name?: string
+  local_product_title?: string
+}
+
+// --- ProcurementOrder ---
+export interface AdminProcurementOrder {
+  id: number
+  connection_id: number
+  local_order_id: number
+  local_order_no: string
+  upstream_order_id?: string
+  upstream_order_no?: string
+  status: string
+  upstream_amount: number
+  upstream_currency: string
+  local_sell_amount: number
+  local_sell_currency: string
+  error_message?: string
+  retry_count: number
+  next_retry_at?: string
+  trace_id: string
+  upstream_payload?: string
+  created_at: string
+  updated_at: string
+  connection_name?: string
+}
+
+// --- Reconciliation ---
+export interface AdminReconciliationJob {
+  id: number
+  connection_id: number
+  type: string
+  status: string
+  time_range_start: string
+  time_range_end: string
+  total_items: number
+  matched_items: number
+  mismatched_items: number
+  missing_items: number
+  created_at: string
+  updated_at: string
+  connection_name?: string
+}
+
+export interface AdminReconciliationItem {
+  id: number
+  job_id: number
+  type: string
+  local_order_no?: string
+  upstream_order_no?: string
+  local_amount?: number
+  upstream_amount?: number
+  status: string
+  resolution?: string
+  resolved_by?: string
+  resolved_at?: string
+  created_at: string
+}
+
+// --- ApiCredential ---
+export interface AdminApiCredential {
+  id: number
+  user_id: number
+  name: string
+  api_key: string
+  status: string
+  is_active: boolean
+  permissions: string[]
+  ip_whitelist: string[]
+  rate_limit: number
+  last_used_at?: string
+  reject_reason?: string
+  created_at: string
+  updated_at: string
+  user_email?: string
+}
+
+// --- Dashboard ---
+export interface AdminDashboardOverview {
+  total_orders: number
+  total_revenue: number
+  total_users: number
+  total_products: number
+  today_orders: number
+  today_revenue: number
+  today_users: number
+  pending_orders: number
+}
+
+export interface AdminDashboardTrendPoint {
+  date: string
+  orders: number
+  revenue: number
+  users: number
+}
+
+export interface AdminDashboardRanking {
+  product_id: number
+  product_title: string
+  total_orders: number
+  total_revenue: number
+}
+
+// --- Affiliate ---
+export interface AdminAffiliateUser {
+  id: number
+  user_id: number
+  code: string
+  status: string
+  total_earnings: number
+  pending_earnings: number
+  confirmed_earnings: number
+  withdrawn_earnings: number
+  total_referrals: number
+  created_at: string
+  updated_at: string
+  user_email?: string
+  user_display_name?: string
+}
+
+export interface AdminAffiliateCommission {
+  id: number
+  affiliate_profile_id: number
+  order_id: number
+  order_no: string
+  amount: number
+  rate: number
+  status: string
+  confirmed_at?: string
+  created_at: string
+  updated_at: string
+  affiliate_code?: string
+  user_email?: string
+}
+
+export interface AdminAffiliateWithdraw {
+  id: number
+  affiliate_profile_id: number
+  amount: number
+  channel: string
+  account_info: string
+  status: string
+  reject_reason?: string
+  paid_at?: string
+  created_at: string
+  updated_at: string
+  affiliate_code?: string
+  user_email?: string
+}

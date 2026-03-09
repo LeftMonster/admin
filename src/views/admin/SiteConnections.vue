@@ -2,18 +2,21 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminSiteConnection } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { confirmAction } from '@/utils/confirm'
 import { notifyError, notifySuccess } from '@/utils/notify'
+import { useFormValidation, rules } from '@/composables/useFormValidation'
 
 const { t } = useI18n()
 const loading = ref(true)
-const connections = ref<any[]>([])
+const connections = ref<AdminSiteConnection[]>([])
 const pagination = reactive({
   page: 1,
   page_size: 20,
@@ -37,6 +40,13 @@ const form = reactive({
   retry_intervals: '30,60,120',
 })
 
+const siteConnectionSchema = {
+  name: [rules.required()],
+  base_url: [rules.required(), rules.url()],
+  api_key: [rules.required()],
+}
+const { errors, validate, clearErrors } = useFormValidation(siteConnectionSchema)
+
 const fetchConnections = async (page = 1) => {
   loading.value = true
   try {
@@ -44,8 +54,8 @@ const fetchConnections = async (page = 1) => {
       page,
       page_size: pagination.page_size,
     })
-    connections.value = (res.data.data as any[]) || []
-    const p = (res.data as any).pagination
+    connections.value = res.data.data || []
+    const p = res.data.pagination
     if (p) {
       pagination.page = p.page
       pagination.page_size = p.page_size
@@ -89,11 +99,12 @@ const resetForm = () => {
 const openCreateModal = () => {
   isEditing.value = false
   editingId.value = null
+  clearErrors()
   resetForm()
   showModal.value = true
 }
 
-const openEditModal = (conn: any) => {
+const openEditModal = (conn: AdminSiteConnection) => {
   isEditing.value = true
   editingId.value = conn.id
   Object.assign(form, {
@@ -122,6 +133,7 @@ const openEditModal = (conn: any) => {
 
 const closeModal = () => {
   showModal.value = false
+  clearErrors()
 }
 
 const buildPayload = () => {
@@ -142,6 +154,7 @@ const buildPayload = () => {
 }
 
 const handleSubmit = async () => {
+  if (!validate({ ...form } as Record<string, unknown>)) return
   try {
     const payload = buildPayload()
     if (isEditing.value && editingId.value) {
@@ -157,7 +170,7 @@ const handleSubmit = async () => {
   }
 }
 
-const handlePing = async (conn: any) => {
+const handlePing = async (conn: AdminSiteConnection) => {
   pingingId.value = conn.id
   try {
     await adminAPI.pingSiteConnection(conn.id)
@@ -170,7 +183,7 @@ const handlePing = async (conn: any) => {
   }
 }
 
-const handleToggleStatus = async (conn: any) => {
+const handleToggleStatus = async (conn: AdminSiteConnection) => {
   const nextStatus = conn.status === 'active' ? 'disabled' : 'active'
   try {
     await adminAPI.updateSiteConnectionStatus(conn.id, { status: nextStatus })
@@ -181,7 +194,7 @@ const handleToggleStatus = async (conn: any) => {
   }
 }
 
-const handleDelete = async (conn: any) => {
+const handleDelete = async (conn: AdminSiteConnection) => {
   const confirmed = await confirmAction({
     description: t('siteConnections.delete.confirm', { name: conn.name || '#' + conn.id }),
     confirmText: t('admin.common.delete'),
@@ -248,7 +261,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="7" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="7" class="p-0">
+              <TableSkeleton :columns="7" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="connections.length === 0">
             <TableCell colspan="7" class="px-6 py-8 text-center text-muted-foreground">{{ t('siteConnections.empty') }}</TableCell>
@@ -318,14 +333,17 @@ onMounted(() => {
             <div class="md:col-span-2">
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('siteConnections.form.name') }}</label>
               <Input v-model="form.name" required :placeholder="t('siteConnections.form.namePlaceholder')" />
+              <p v-if="errors.name" class="text-xs text-destructive mt-1">{{ errors.name }}</p>
             </div>
             <div class="md:col-span-2">
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('siteConnections.form.baseUrl') }}</label>
               <Input v-model="form.base_url" required :placeholder="t('siteConnections.form.baseUrlPlaceholder')" />
+              <p v-if="errors.base_url" class="text-xs text-destructive mt-1">{{ errors.base_url }}</p>
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('siteConnections.form.apiKey') }}</label>
               <Input v-model="form.api_key" :placeholder="t('siteConnections.form.apiKeyPlaceholder')" />
+              <p v-if="errors.api_key" class="text-xs text-destructive mt-1">{{ errors.api_key }}</p>
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('siteConnections.form.apiSecret') }}</label>

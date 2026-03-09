@@ -30,6 +30,31 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-vue': ['vue', 'vue-router', 'pinia', 'vue-i18n'],
+          'vendor-ui': ['reka-ui', 'class-variance-authority', 'clsx', 'tailwind-merge', 'lucide-vue-next'],
+          'vendor-tiptap': [
+            '@tiptap/vue-3',
+            '@tiptap/starter-kit',
+            '@tiptap/extension-image',
+            '@tiptap/extension-link',
+            '@tiptap/extension-placeholder',
+            '@tiptap/extension-text-align',
+            '@tiptap/extension-color',
+            '@tiptap/extension-text-style',
+            '@tiptap/extension-table',
+            '@tiptap/extension-table-cell',
+            '@tiptap/extension-table-header',
+            '@tiptap/extension-table-row',
+          ],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -7,10 +7,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { notifyError, notifySuccess } from '@/utils/notify'
+import SettingsSMTPTab from './components/SettingsSMTPTab.vue'
+import SettingsCaptchaTab from './components/SettingsCaptchaTab.vue'
+import SettingsNotificationTab from './components/SettingsNotificationTab.vue'
 
 const { t } = useI18n()
 const loading = ref(false)
-const smtpTesting = ref(false)
+const smtpTabRef = ref<InstanceType<typeof SettingsSMTPTab>>()
+const captchaTabRef = ref<InstanceType<typeof SettingsCaptchaTab>>()
+const notificationTabRef = ref<InstanceType<typeof SettingsNotificationTab>>()
 const supportedLanguages = ['zh-CN', 'zh-TW', 'en-US'] as const
 type SupportedLanguage = (typeof supportedLanguages)[number]
 type SiteScriptPosition = 'head' | 'body_end'
@@ -59,8 +64,8 @@ const fallbackCurrencyOptions = [
 
 const currencyOptions = computed(() => {
   const values: string[] = []
-  if (typeof Intl !== 'undefined' && typeof (Intl as any).supportedValuesOf === 'function') {
-    const candidate = (Intl as any).supportedValuesOf('currency')
+  if (typeof Intl !== 'undefined' && typeof (Intl as Record<string, unknown>).supportedValuesOf === 'function') {
+    const candidate = (Intl as Record<string, unknown> & { supportedValuesOf: (key: string) => unknown }).supportedValuesOf('currency')
     if (Array.isArray(candidate)) {
       values.push(...candidate.map((item: unknown) => String(item || '').trim().toUpperCase()))
     }
@@ -131,13 +136,14 @@ const normalizeFooterLinks = (raw: unknown): FooterLinkItem[] => {
     .slice(0, footerLinksMaxCount)
 }
 
-const normalizeLocalizedField = (raw: any): Record<SupportedLanguage, string> => {
+const normalizeLocalizedField = (raw: unknown): Record<SupportedLanguage, string> => {
   const normalized = createLocalizedField()
   if (!raw || typeof raw !== 'object') {
     return normalized
   }
+  const record = raw as Record<string, unknown>
   supportedLanguages.forEach((lang) => {
-    const value = raw[lang]
+    const value = record[lang]
     normalized[lang] = typeof value === 'string' ? value : ''
   })
   return normalized
@@ -184,7 +190,7 @@ const form = reactive({
   footer_links: [] as FooterLinkItem[],
 })
 
-const smtpForm = reactive({
+const smtpData = reactive({
   enabled: false,
   host: '',
   port: 587,
@@ -201,10 +207,9 @@ const smtpForm = reactive({
     max_attempts: 5,
     length: 6,
   },
-  test_email: '',
 })
 
-const captchaForm = reactive({
+const captchaData = reactive({
   provider: 'none',
   scenes: {
     login: false,
@@ -240,7 +245,7 @@ const telegramForm = reactive({
   replay_ttl_seconds: 300,
 })
 
-const notificationForm = reactive({
+const notificationData = reactive({
   default_locale: 'zh-CN',
   dedupe_ttl_seconds: 300,
   channels: {
@@ -291,13 +296,6 @@ const normalizeNumber = (value: unknown, fallback: number) => {
   return parsed
 }
 
-const splitRecipients = (raw: string) => {
-  return raw
-    .split(/\r?\n|,/)
-    .map((item) => item.trim())
-    .filter((item) => item !== '')
-}
-
 const joinRecipients = (items: unknown) => {
   if (!Array.isArray(items)) return ''
   return items
@@ -306,11 +304,12 @@ const joinRecipients = (items: unknown) => {
     .join('\n')
 }
 
-const normalizeNotificationSceneTemplate = (raw: any) => {
+const normalizeNotificationSceneTemplate = (raw: unknown) => {
   const fallback = createNotificationSceneTemplate()
   if (!raw || typeof raw !== 'object') return fallback
+  const record = raw as Record<string, unknown>
   ;(['zh-CN', 'zh-TW', 'en-US'] as const).forEach((lang) => {
-    const item = raw[lang]
+    const item = record[lang] as Record<string, unknown> | undefined
     if (!item || typeof item !== 'object') return
     fallback[lang].title = typeof item.title === 'string' ? item.title : ''
     fallback[lang].body = typeof item.body === 'string' ? item.body : ''
@@ -346,9 +345,10 @@ const fetchSettings = async () => {
     ])
 
     if (siteRes.data && siteRes.data.data) {
-      const data = siteRes.data.data as any
-      if (data.brand) {
-        form.brand.site_name = String(data.brand.site_name || '')
+      const data = siteRes.data.data as Record<string, unknown>
+      const brand = data.brand as Record<string, unknown> | undefined
+      if (brand) {
+        form.brand.site_name = String(brand.site_name || '')
       }
       {
         const rawCurrency = String(data.currency || 'CNY').trim().toUpperCase()
@@ -357,25 +357,29 @@ const fetchSettings = async () => {
       if (data.contact) {
         Object.assign(form.contact, data.contact)
       }
-      if (data.seo) {
+      const seo = data.seo as Record<string, unknown> | undefined
+      if (seo) {
         ;['title', 'keywords', 'description'].forEach((field) => {
-          if (data.seo[field]) {
-            Object.assign(form.seo[field as keyof typeof form.seo], data.seo[field])
+          if (seo[field]) {
+            Object.assign(form.seo[field as keyof typeof form.seo], seo[field])
           }
         })
       }
-      if (data.about) {
-        if (data.about.hero) {
-          form.about.hero.title = normalizeLocalizedField(data.about.hero.title)
-          form.about.hero.subtitle = normalizeLocalizedField(data.about.hero.subtitle)
+      const about = data.about as Record<string, unknown> | undefined
+      if (about) {
+        const hero = about.hero as Record<string, unknown> | undefined
+        if (hero) {
+          form.about.hero.title = normalizeLocalizedField(hero.title)
+          form.about.hero.subtitle = normalizeLocalizedField(hero.subtitle)
         }
-        form.about.introduction = normalizeLocalizedField(data.about.introduction)
+        form.about.introduction = normalizeLocalizedField(about.introduction)
 
-        if (data.about.services) {
-          form.about.services.title = normalizeLocalizedField(data.about.services.title)
-          const serviceItems = Array.isArray(data.about.services.items)
-            ? data.about.services.items
-                .map((item: any) => normalizeLocalizedField(item))
+        const services = about.services as Record<string, unknown> | undefined
+        if (services) {
+          form.about.services.title = normalizeLocalizedField(services.title)
+          const serviceItems = Array.isArray(services.items)
+            ? services.items
+                .map((item: unknown) => normalizeLocalizedField(item))
                 .filter((item: Record<SupportedLanguage, string>) => isLocalizedFieldNotEmpty(item))
                 .slice(0, 12)
             : []
@@ -384,16 +388,18 @@ const fetchSettings = async () => {
           form.about.services.items.splice(0, form.about.services.items.length)
         }
 
-        if (data.about.contact) {
-          form.about.contact.title = normalizeLocalizedField(data.about.contact.title)
-          form.about.contact.text = normalizeLocalizedField(data.about.contact.text)
+        const aboutContact = about.contact as Record<string, unknown> | undefined
+        if (aboutContact) {
+          form.about.contact.title = normalizeLocalizedField(aboutContact.title)
+          form.about.contact.text = normalizeLocalizedField(aboutContact.text)
         }
       }
 
-      if (data.legal) {
+      const legal = data.legal as Record<string, unknown> | undefined
+      if (legal) {
         ;['terms', 'privacy'].forEach((field) => {
-          if (data.legal[field]) {
-            Object.assign(form.legal[field as keyof typeof form.legal], data.legal[field])
+          if (legal[field]) {
+            Object.assign(form.legal[field as keyof typeof form.legal], legal[field])
           }
         })
       }
@@ -406,50 +412,54 @@ const fetchSettings = async () => {
     }
 
     if (smtpRes.data && smtpRes.data.data) {
-      const smtp = smtpRes.data.data as any
-      smtpForm.enabled = !!smtp.enabled
-      smtpForm.host = String(smtp.host || '')
-      smtpForm.port = normalizeNumber(smtp.port, 587)
-      smtpForm.username = String(smtp.username || '')
-      smtpForm.password = ''
-      smtpForm.has_password = !!smtp.has_password
-      smtpForm.from = String(smtp.from || '')
-      smtpForm.from_name = String(smtp.from_name || '')
-      smtpForm.use_tls = !!smtp.use_tls
-      smtpForm.use_ssl = !!smtp.use_ssl
-      smtpForm.verify_code.expire_minutes = normalizeNumber(smtp.verify_code?.expire_minutes, 10)
-      smtpForm.verify_code.send_interval_seconds = normalizeNumber(smtp.verify_code?.send_interval_seconds, 60)
-      smtpForm.verify_code.max_attempts = normalizeNumber(smtp.verify_code?.max_attempts, 5)
-      smtpForm.verify_code.length = normalizeNumber(smtp.verify_code?.length, 6)
+      const smtp = smtpRes.data.data as Record<string, unknown>
+      smtpData.enabled = !!smtp.enabled
+      smtpData.host = String(smtp.host || '')
+      smtpData.port = normalizeNumber(smtp.port, 587)
+      smtpData.username = String(smtp.username || '')
+      smtpData.password = ''
+      smtpData.has_password = !!smtp.has_password
+      smtpData.from = String(smtp.from || '')
+      smtpData.from_name = String(smtp.from_name || '')
+      smtpData.use_tls = !!smtp.use_tls
+      smtpData.use_ssl = !!smtp.use_ssl
+      const verifyCode = smtp.verify_code as Record<string, unknown> | undefined
+      smtpData.verify_code.expire_minutes = normalizeNumber(verifyCode?.expire_minutes, 10)
+      smtpData.verify_code.send_interval_seconds = normalizeNumber(verifyCode?.send_interval_seconds, 60)
+      smtpData.verify_code.max_attempts = normalizeNumber(verifyCode?.max_attempts, 5)
+      smtpData.verify_code.length = normalizeNumber(verifyCode?.length, 6)
     }
 
 
     if (captchaRes.data && captchaRes.data.data) {
-      const captcha = captchaRes.data.data as any
-      captchaForm.provider = String(captcha.provider || 'none')
-      captchaForm.scenes.login = !!captcha.scenes?.login
-      captchaForm.scenes.register_send_code = !!captcha.scenes?.register_send_code
-      captchaForm.scenes.reset_send_code = !!captcha.scenes?.reset_send_code
-      captchaForm.scenes.guest_create_order = !!captcha.scenes?.guest_create_order
-      captchaForm.scenes.gift_card_redeem = !!captcha.scenes?.gift_card_redeem
+      const captcha = captchaRes.data.data as Record<string, unknown>
+      captchaData.provider = String(captcha.provider || 'none')
+      const captchaScenes = captcha.scenes as Record<string, unknown> | undefined
+      captchaData.scenes.login = !!captchaScenes?.login
+      captchaData.scenes.register_send_code = !!captchaScenes?.register_send_code
+      captchaData.scenes.reset_send_code = !!captchaScenes?.reset_send_code
+      captchaData.scenes.guest_create_order = !!captchaScenes?.guest_create_order
+      captchaData.scenes.gift_card_redeem = !!captchaScenes?.gift_card_redeem
 
-      captchaForm.image.length = normalizeNumber(captcha.image?.length, 5)
-      captchaForm.image.width = normalizeNumber(captcha.image?.width, 240)
-      captchaForm.image.height = normalizeNumber(captcha.image?.height, 80)
-      captchaForm.image.noise_count = normalizeNumber(captcha.image?.noise_count, 2)
-      captchaForm.image.show_line = normalizeNumber(captcha.image?.show_line, 2)
-      captchaForm.image.expire_seconds = normalizeNumber(captcha.image?.expire_seconds, 300)
-      captchaForm.image.max_store = normalizeNumber(captcha.image?.max_store, 10240)
+      const captchaImage = captcha.image as Record<string, unknown> | undefined
+      captchaData.image.length = normalizeNumber(captchaImage?.length, 5)
+      captchaData.image.width = normalizeNumber(captchaImage?.width, 240)
+      captchaData.image.height = normalizeNumber(captchaImage?.height, 80)
+      captchaData.image.noise_count = normalizeNumber(captchaImage?.noise_count, 2)
+      captchaData.image.show_line = normalizeNumber(captchaImage?.show_line, 2)
+      captchaData.image.expire_seconds = normalizeNumber(captchaImage?.expire_seconds, 300)
+      captchaData.image.max_store = normalizeNumber(captchaImage?.max_store, 10240)
 
-      captchaForm.turnstile.site_key = String(captcha.turnstile?.site_key || '')
-      captchaForm.turnstile.secret_key = ''
-      captchaForm.turnstile.has_secret = !!captcha.turnstile?.has_secret
-      captchaForm.turnstile.verify_url = String(captcha.turnstile?.verify_url || 'https://challenges.cloudflare.com/turnstile/v0/siteverify')
-      captchaForm.turnstile.timeout_ms = normalizeNumber(captcha.turnstile?.timeout_ms, 2000)
+      const captchaTurnstile = captcha.turnstile as Record<string, unknown> | undefined
+      captchaData.turnstile.site_key = String(captchaTurnstile?.site_key || '')
+      captchaData.turnstile.secret_key = ''
+      captchaData.turnstile.has_secret = !!captchaTurnstile?.has_secret
+      captchaData.turnstile.verify_url = String(captchaTurnstile?.verify_url || 'https://challenges.cloudflare.com/turnstile/v0/siteverify')
+      captchaData.turnstile.timeout_ms = normalizeNumber(captchaTurnstile?.timeout_ms, 2000)
     }
 
     if (telegramRes.data && telegramRes.data.data) {
-      const telegram = telegramRes.data.data as any
+      const telegram = telegramRes.data.data as Record<string, unknown>
       telegramForm.enabled = !!telegram.enabled
       telegramForm.bot_username = String(telegram.bot_username || '')
       telegramForm.bot_token = ''
@@ -459,34 +469,41 @@ const fetchSettings = async () => {
     }
 
     if (notificationRes.data && notificationRes.data.data) {
-      const notification = notificationRes.data.data as any
-      notificationForm.default_locale = String(notification.default_locale || 'zh-CN')
-      notificationForm.dedupe_ttl_seconds = normalizeNumber(notification.dedupe_ttl_seconds, 300)
+      const notification = notificationRes.data.data as Record<string, unknown>
+      notificationData.default_locale = String(notification.default_locale || 'zh-CN')
+      notificationData.dedupe_ttl_seconds = normalizeNumber(notification.dedupe_ttl_seconds, 300)
 
-      notificationForm.channels.email.enabled = !!notification.channels?.email?.enabled
-      notificationForm.channels.email.recipients_text = joinRecipients(notification.channels?.email?.recipients)
-      notificationForm.channels.telegram.enabled = !!notification.channels?.telegram?.enabled
-      notificationForm.channels.telegram.recipients_text = joinRecipients(notification.channels?.telegram?.recipients)
+      const notifChannels = notification.channels as Record<string, Record<string, unknown>> | undefined
+      const notifEmail = notifChannels?.email
+      const notifTelegram = notifChannels?.telegram
+      notificationData.channels.email.enabled = !!notifEmail?.enabled
+      notificationData.channels.email.recipients_text = joinRecipients(notifEmail?.recipients)
+      notificationData.channels.telegram.enabled = !!notifTelegram?.enabled
+      notificationData.channels.telegram.recipients_text = joinRecipients(notifTelegram?.recipients)
 
-      notificationForm.scenes.wallet_recharge_success = !!notification.scenes?.wallet_recharge_success
-      notificationForm.scenes.order_paid_success = !!notification.scenes?.order_paid_success
-      notificationForm.scenes.manual_fulfillment_pending = !!notification.scenes?.manual_fulfillment_pending
-      notificationForm.scenes.exception_alert = !!notification.scenes?.exception_alert
+      const notifScenes = notification.scenes as Record<string, unknown> | undefined
+      notificationData.scenes.wallet_recharge_success = !!notifScenes?.wallet_recharge_success
+      notificationData.scenes.order_paid_success = !!notifScenes?.order_paid_success
+      notificationData.scenes.manual_fulfillment_pending = !!notifScenes?.manual_fulfillment_pending
+      notificationData.scenes.exception_alert = !!notifScenes?.exception_alert
 
-      notificationForm.templates.wallet_recharge_success = normalizeNotificationSceneTemplate(notification.templates?.wallet_recharge_success)
-      notificationForm.templates.order_paid_success = normalizeNotificationSceneTemplate(notification.templates?.order_paid_success)
-      notificationForm.templates.manual_fulfillment_pending = normalizeNotificationSceneTemplate(notification.templates?.manual_fulfillment_pending)
-      notificationForm.templates.exception_alert = normalizeNotificationSceneTemplate(notification.templates?.exception_alert)
+      const notifTemplates = notification.templates as Record<string, unknown> | undefined
+      notificationData.templates.wallet_recharge_success = normalizeNotificationSceneTemplate(notifTemplates?.wallet_recharge_success)
+      notificationData.templates.order_paid_success = normalizeNotificationSceneTemplate(notifTemplates?.order_paid_success)
+      notificationData.templates.manual_fulfillment_pending = normalizeNotificationSceneTemplate(notifTemplates?.manual_fulfillment_pending)
+      notificationData.templates.exception_alert = normalizeNotificationSceneTemplate(notifTemplates?.exception_alert)
     }
 
     if (dashboardRes.data && dashboardRes.data.data) {
-      const dashboard = dashboardRes.data.data as any
-      dashboardForm.alert.low_stock_threshold = clampNumber(dashboard.alert?.low_stock_threshold, 1, 500, 5)
-      dashboardForm.alert.out_of_stock_products_threshold = clampNumber(dashboard.alert?.out_of_stock_products_threshold, 1, 10000, 1)
-      dashboardForm.alert.pending_payment_orders_threshold = clampNumber(dashboard.alert?.pending_payment_orders_threshold, 1, 100000, 20)
-      dashboardForm.alert.payments_failed_threshold = clampNumber(dashboard.alert?.payments_failed_threshold, 1, 100000, 10)
-      dashboardForm.ranking.top_products_limit = clampNumber(dashboard.ranking?.top_products_limit, 1, 20, 5)
-      dashboardForm.ranking.top_channels_limit = clampNumber(dashboard.ranking?.top_channels_limit, 1, 20, 5)
+      const dashboard = dashboardRes.data.data as Record<string, unknown>
+      const dashAlert = dashboard.alert as Record<string, unknown> | undefined
+      const dashRanking = dashboard.ranking as Record<string, unknown> | undefined
+      dashboardForm.alert.low_stock_threshold = clampNumber(dashAlert?.low_stock_threshold, 1, 500, 5)
+      dashboardForm.alert.out_of_stock_products_threshold = clampNumber(dashAlert?.out_of_stock_products_threshold, 1, 10000, 1)
+      dashboardForm.alert.pending_payment_orders_threshold = clampNumber(dashAlert?.pending_payment_orders_threshold, 1, 100000, 20)
+      dashboardForm.alert.payments_failed_threshold = clampNumber(dashAlert?.payments_failed_threshold, 1, 100000, 10)
+      dashboardForm.ranking.top_products_limit = clampNumber(dashRanking?.top_products_limit, 1, 20, 5)
+      dashboardForm.ranking.top_channels_limit = clampNumber(dashRanking?.top_channels_limit, 1, 20, 5)
     }
 
   } catch (err) {
@@ -549,69 +566,6 @@ const removeFooterLinkItem = (index: number) => {
   form.footer_links.splice(index, 1)
 }
 
-const saveSMTPSettings = async () => {
-  const payload = {
-    enabled: smtpForm.enabled,
-    host: smtpForm.host,
-    port: Number(smtpForm.port),
-    username: smtpForm.username,
-    password: smtpForm.password,
-    from: smtpForm.from,
-    from_name: smtpForm.from_name,
-    use_tls: smtpForm.use_tls,
-    use_ssl: smtpForm.use_ssl,
-    verify_code: {
-      expire_minutes: Number(smtpForm.verify_code.expire_minutes),
-      send_interval_seconds: Number(smtpForm.verify_code.send_interval_seconds),
-      max_attempts: Number(smtpForm.verify_code.max_attempts),
-      length: Number(smtpForm.verify_code.length),
-    },
-  }
-  const res = await adminAPI.updateSMTPSettings(payload)
-  const data = res.data?.data as any
-  smtpForm.password = ''
-  smtpForm.has_password = !!data?.has_password || smtpForm.has_password
-}
-
-
-const saveCaptchaSettings = async () => {
-  const payload: Record<string, unknown> = {
-    provider: captchaForm.provider,
-    scenes: {
-      login: captchaForm.scenes.login,
-      register_send_code: captchaForm.scenes.register_send_code,
-      reset_send_code: captchaForm.scenes.reset_send_code,
-      guest_create_order: captchaForm.scenes.guest_create_order,
-      gift_card_redeem: captchaForm.scenes.gift_card_redeem,
-    },
-    image: {
-      length: Number(captchaForm.image.length),
-      width: Number(captchaForm.image.width),
-      height: Number(captchaForm.image.height),
-      noise_count: Number(captchaForm.image.noise_count),
-      show_line: Number(captchaForm.image.show_line),
-      expire_seconds: Number(captchaForm.image.expire_seconds),
-      max_store: Number(captchaForm.image.max_store),
-    },
-    turnstile: {
-      site_key: captchaForm.turnstile.site_key,
-      verify_url: captchaForm.turnstile.verify_url,
-      timeout_ms: Number(captchaForm.turnstile.timeout_ms),
-    },
-  }
-
-  if (captchaForm.turnstile.secret_key.trim() !== '') {
-    payload.turnstile = {
-      ...(payload.turnstile as Record<string, unknown>),
-      secret_key: captchaForm.turnstile.secret_key.trim(),
-    }
-  }
-
-  const res = await adminAPI.updateCaptchaSettings(payload)
-  const data = res.data?.data as any
-  captchaForm.turnstile.secret_key = ''
-  captchaForm.turnstile.has_secret = !!data?.turnstile?.has_secret || captchaForm.turnstile.has_secret
-}
 
 const saveTelegramAuthSettings = async () => {
   const payload: Record<string, unknown> = {
@@ -625,35 +579,11 @@ const saveTelegramAuthSettings = async () => {
   }
 
   const res = await adminAPI.updateTelegramAuthSettings(payload)
-  const data = res.data?.data as any
+  const data = res.data?.data as Record<string, unknown> | undefined
   telegramForm.bot_token = ''
   telegramForm.has_bot_token = !!data?.has_bot_token || telegramForm.has_bot_token
 }
 
-const saveNotificationCenterSettings = async () => {
-  const payload = {
-    default_locale: notificationForm.default_locale,
-    dedupe_ttl_seconds: Number(notificationForm.dedupe_ttl_seconds),
-    channels: {
-      email: {
-        enabled: notificationForm.channels.email.enabled,
-        recipients: splitRecipients(notificationForm.channels.email.recipients_text),
-      },
-      telegram: {
-        enabled: notificationForm.channels.telegram.enabled,
-        recipients: splitRecipients(notificationForm.channels.telegram.recipients_text),
-      },
-    },
-    scenes: {
-      wallet_recharge_success: notificationForm.scenes.wallet_recharge_success,
-      order_paid_success: notificationForm.scenes.order_paid_success,
-      manual_fulfillment_pending: notificationForm.scenes.manual_fulfillment_pending,
-      exception_alert: notificationForm.scenes.exception_alert,
-    },
-    templates: notificationForm.templates,
-  }
-  await adminAPI.updateNotificationCenterSettings(payload)
-}
 
 const saveDashboardSettings = async () => {
   const normalized = {
@@ -684,16 +614,22 @@ const saveDashboardSettings = async () => {
 }
 
 const saveSettings = async () => {
+  if (currentTab.value === 'smtp') {
+    await smtpTabRef.value?.save()
+    return
+  }
+  if (currentTab.value === 'captcha') {
+    await captchaTabRef.value?.save()
+    return
+  }
+  if (currentTab.value === 'notification') {
+    await notificationTabRef.value?.save()
+    return
+  }
   loading.value = true
   try {
-    if (currentTab.value === 'smtp') {
-      await saveSMTPSettings()
-    } else if (currentTab.value === 'captcha') {
-      await saveCaptchaSettings()
-    } else if (currentTab.value === 'telegram') {
+    if (currentTab.value === 'telegram') {
       await saveTelegramAuthSettings()
-    } else if (currentTab.value === 'notification') {
-      await saveNotificationCenterSettings()
     } else if (currentTab.value === 'dashboard') {
       await saveDashboardSettings()
     } else {
@@ -704,22 +640,6 @@ const saveSettings = async () => {
     notifyErrorIfNeeded(err, t('admin.settings.alerts.saveFailed'))
   } finally {
     loading.value = false
-  }
-}
-
-const testSMTPSettings = async () => {
-  if (!smtpForm.test_email || smtpForm.test_email.trim() === '') {
-    notifyError(t('admin.settings.smtp.testEmailRequired'))
-    return
-  }
-  smtpTesting.value = true
-  try {
-    await adminAPI.testSMTPSettings({ to_email: smtpForm.test_email.trim() })
-    notifySuccess(t('admin.settings.smtp.testSuccess'))
-  } catch (err) {
-    notifyErrorIfNeeded(err, t('admin.settings.smtp.testFailed'))
-  } finally {
-    smtpTesting.value = false
   }
 }
 
@@ -747,7 +667,7 @@ onMounted(() => {
             {{ lang.name }}
           </button>
         </div>
-        <Button size="sm" :disabled="loading || smtpTesting" @click="saveSettings">
+        <Button size="sm" :disabled="loading || smtpTabRef?.submitting || smtpTabRef?.smtpTesting || captchaTabRef?.submitting || notificationTabRef?.submitting" @click="saveSettings">
           <span v-if="loading" class="h-3 w-3 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span>
           {{ loading ? t('admin.settings.actions.saving') : t('admin.settings.actions.save') }}
         </Button>
@@ -1028,205 +948,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-show="currentTab === 'smtp'" class="space-y-6">
-      <div class="rounded-xl border border-border bg-card">
-        <div class="border-b border-border bg-muted/40 px-6 py-4">
-          <h2 class="text-lg font-semibold">{{ t('admin.settings.smtp.title') }}</h2>
-          <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.smtp.subtitle') }}</p>
-        </div>
-
-        <div class="space-y-6 p-6">
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div class="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
-              <input id="smtp-enabled" v-model="smtpForm.enabled" type="checkbox" class="h-4 w-4 accent-primary" />
-              <label for="smtp-enabled" class="text-sm font-medium">{{ t('admin.settings.smtp.enabled') }}</label>
-            </div>
-            <div class="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
-              <input id="smtp-tls" v-model="smtpForm.use_tls" type="checkbox" class="h-4 w-4 accent-primary" />
-              <label for="smtp-tls" class="text-sm font-medium">{{ t('admin.settings.smtp.useTLS') }}</label>
-              <input id="smtp-ssl" v-model="smtpForm.use_ssl" type="checkbox" class="ml-4 h-4 w-4 accent-primary" />
-              <label for="smtp-ssl" class="text-sm font-medium">{{ t('admin.settings.smtp.useSSL') }}</label>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.host') }}</label>
-              <Input v-model="smtpForm.host" :placeholder="t('admin.settings.smtp.hostPlaceholder')" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.port') }}</label>
-              <Input v-model.number="smtpForm.port" type="number" :placeholder="t('admin.settings.smtp.portPlaceholder')" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.username') }}</label>
-              <Input v-model="smtpForm.username" :placeholder="t('admin.settings.smtp.usernamePlaceholder')" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.password') }}</label>
-              <Input v-model="smtpForm.password" type="password" :placeholder="t('admin.settings.smtp.passwordPlaceholder')" />
-              <p class="text-xs text-muted-foreground">
-                {{ smtpForm.has_password ? t('admin.settings.smtp.passwordHintKeep') : t('admin.settings.smtp.passwordHintEmpty') }}
-              </p>
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.from') }}</label>
-              <Input v-model="smtpForm.from" :placeholder="t('admin.settings.smtp.fromPlaceholder')" />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.fromName') }}</label>
-              <Input v-model="smtpForm.from_name" :placeholder="t('admin.settings.smtp.fromNamePlaceholder')" />
-            </div>
-          </div>
-
-          <div class="rounded-xl border border-border">
-            <div class="border-b border-border bg-muted/30 px-4 py-3">
-              <h3 class="text-sm font-semibold">{{ t('admin.settings.smtp.verifyCode.title') }}</h3>
-            </div>
-            <div class="grid grid-cols-1 gap-4 p-4 md:grid-cols-4">
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.verifyCode.expireMinutes') }}</label>
-                <Input v-model.number="smtpForm.verify_code.expire_minutes" type="number" min="1" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.verifyCode.sendIntervalSeconds') }}</label>
-                <Input v-model.number="smtpForm.verify_code.send_interval_seconds" type="number" min="1" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.verifyCode.maxAttempts') }}</label>
-                <Input v-model.number="smtpForm.verify_code.max_attempts" type="number" min="1" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.verifyCode.length') }}</label>
-                <Input v-model.number="smtpForm.verify_code.length" type="number" min="4" max="10" />
-              </div>
-            </div>
-          </div>
-
-          <div class="rounded-xl border border-border bg-muted/20 p-4">
-            <h3 class="text-sm font-semibold">{{ t('admin.settings.smtp.testTitle') }}</h3>
-            <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.smtp.testSubtitle') }}</p>
-            <div class="mt-3 flex flex-col gap-3 md:flex-row">
-              <Input v-model="smtpForm.test_email" :placeholder="t('admin.settings.smtp.testEmailPlaceholder')" />
-              <Button variant="secondary" :disabled="smtpTesting" @click="testSMTPSettings">
-                {{ smtpTesting ? t('admin.settings.smtp.testing') : t('admin.settings.smtp.testButton') }}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div v-show="currentTab === 'smtp'">
+      <SettingsSMTPTab ref="smtpTabRef" :data="smtpData" @saved="fetchSettings" />
     </div>
 
-    <div v-show="currentTab === 'captcha'" class="space-y-6">
-      <div class="rounded-xl border border-border bg-card">
-        <div class="border-b border-border bg-muted/40 px-6 py-4">
-          <h2 class="text-lg font-semibold">{{ t('admin.settings.captcha.title') }}</h2>
-          <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.captcha.subtitle') }}</p>
-        </div>
-
-        <div class="space-y-6 p-6">
-          <div class="space-y-2">
-            <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.provider') }}</label>
-            <select
-              v-model="captchaForm.provider"
-              class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="none">{{ t('admin.settings.captcha.providerNone') }}</option>
-              <option value="image">{{ t('admin.settings.captcha.providerImage') }}</option>
-              <option value="turnstile">{{ t('admin.settings.captcha.providerTurnstile') }}</option>
-            </select>
-          </div>
-
-          <div class="rounded-xl border border-border bg-muted/20 p-4">
-            <h3 class="text-sm font-semibold">{{ t('admin.settings.captcha.scenesTitle') }}</h3>
-            <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="captchaForm.scenes.login" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.captcha.scenes.login') }}
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="captchaForm.scenes.register_send_code" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.captcha.scenes.registerSendCode') }}
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="captchaForm.scenes.reset_send_code" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.captcha.scenes.resetSendCode') }}
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="captchaForm.scenes.guest_create_order" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.captcha.scenes.guestCreateOrder') }}
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="captchaForm.scenes.gift_card_redeem" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.captcha.scenes.giftCardRedeem') }}
-              </label>
-            </div>
-          </div>
-
-          <div v-if="captchaForm.provider === 'image'" class="rounded-xl border border-border">
-            <div class="border-b border-border bg-muted/30 px-4 py-3">
-              <h3 class="text-sm font-semibold">{{ t('admin.settings.captcha.image.title') }}</h3>
-            </div>
-            <div class="grid grid-cols-1 gap-4 p-4 md:grid-cols-4">
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.image.length') }}</label>
-                <Input v-model.number="captchaForm.image.length" type="number" min="4" max="8" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.image.width') }}</label>
-                <Input v-model.number="captchaForm.image.width" type="number" min="100" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.image.height') }}</label>
-                <Input v-model.number="captchaForm.image.height" type="number" min="40" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.image.expireSeconds') }}</label>
-                <Input v-model.number="captchaForm.image.expire_seconds" type="number" min="30" max="3600" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.image.noiseCount') }}</label>
-                <Input v-model.number="captchaForm.image.noise_count" type="number" min="0" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.image.showLine') }}</label>
-                <Input v-model.number="captchaForm.image.show_line" type="number" min="0" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.image.maxStore') }}</label>
-                <Input v-model.number="captchaForm.image.max_store" type="number" min="100" />
-              </div>
-            </div>
-          </div>
-
-          <div v-if="captchaForm.provider === 'turnstile'" class="rounded-xl border border-border">
-            <div class="border-b border-border bg-muted/30 px-4 py-3">
-              <h3 class="text-sm font-semibold">{{ t('admin.settings.captcha.turnstile.title') }}</h3>
-            </div>
-            <div class="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
-              <div class="space-y-2 md:col-span-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.turnstile.siteKey') }}</label>
-                <Input v-model="captchaForm.turnstile.site_key" />
-              </div>
-              <div class="space-y-2 md:col-span-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.turnstile.secretKey') }}</label>
-                <Input v-model="captchaForm.turnstile.secret_key" type="password" :placeholder="t('admin.settings.captcha.turnstile.secretKeyPlaceholder')" />
-                <p class="text-xs text-muted-foreground">
-                  {{ captchaForm.turnstile.has_secret ? t('admin.settings.captcha.turnstile.secretHintKeep') : t('admin.settings.captcha.turnstile.secretHintEmpty') }}
-                </p>
-              </div>
-              <div class="space-y-2 md:col-span-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.turnstile.verifyURL') }}</label>
-                <Input v-model="captchaForm.turnstile.verify_url" />
-              </div>
-              <div class="space-y-2">
-                <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.turnstile.timeoutMS') }}</label>
-                <Input v-model.number="captchaForm.turnstile.timeout_ms" type="number" min="500" max="10000" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div v-show="currentTab === 'captcha'">
+      <SettingsCaptchaTab ref="captchaTabRef" :data="captchaData" @saved="fetchSettings" />
     </div>
 
 
@@ -1269,136 +996,8 @@ onMounted(() => {
     </div>
 
 
-    <div v-show="currentTab === 'notification'" class="space-y-6">
-      <div class="rounded-xl border border-border bg-card">
-        <div class="border-b border-border bg-muted/40 px-6 py-4">
-          <h2 class="text-lg font-semibold">{{ t('admin.settings.notification.title') }}</h2>
-          <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.notification.subtitle') }}</p>
-        </div>
-
-        <div class="space-y-6 p-6">
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.notification.defaultLocale') }}</label>
-              <select v-model="notificationForm.default_locale" class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                <option value="zh-CN">zh-CN</option>
-                <option value="zh-TW">zh-TW</option>
-                <option value="en-US">en-US</option>
-              </select>
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.notification.dedupeTTLSeconds') }}</label>
-              <Input v-model.number="notificationForm.dedupe_ttl_seconds" type="number" min="30" max="86400" />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div class="rounded-xl border border-border">
-              <div class="border-b border-border bg-muted/30 px-4 py-3">
-                <h3 class="text-sm font-semibold">{{ t('admin.settings.notification.channels.email.title') }}</h3>
-              </div>
-              <div class="space-y-3 p-4">
-                <label class="flex items-center gap-2 text-sm">
-                  <input v-model="notificationForm.channels.email.enabled" type="checkbox" class="h-4 w-4 accent-primary" />
-                  {{ t('admin.settings.notification.channels.email.enabled') }}
-                </label>
-                <div class="space-y-2">
-                  <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.notification.channels.email.recipients') }}</label>
-                  <Textarea
-                    v-model="notificationForm.channels.email.recipients_text"
-                    rows="5"
-                    :placeholder="t('admin.settings.notification.channels.email.recipientsPlaceholder')"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div class="rounded-xl border border-border">
-              <div class="border-b border-border bg-muted/30 px-4 py-3">
-                <h3 class="text-sm font-semibold">{{ t('admin.settings.notification.channels.telegram.title') }}</h3>
-              </div>
-              <div class="space-y-3 p-4">
-                <label class="flex items-center gap-2 text-sm">
-                  <input v-model="notificationForm.channels.telegram.enabled" type="checkbox" class="h-4 w-4 accent-primary" />
-                  {{ t('admin.settings.notification.channels.telegram.enabled') }}
-                </label>
-                <div class="space-y-2">
-                  <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.notification.channels.telegram.recipients') }}</label>
-                  <Textarea
-                    v-model="notificationForm.channels.telegram.recipients_text"
-                    rows="5"
-                    :placeholder="t('admin.settings.notification.channels.telegram.recipientsPlaceholder')"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="rounded-xl border border-border bg-muted/20 p-4">
-            <h3 class="text-sm font-semibold">{{ t('admin.settings.notification.scenes.title') }}</h3>
-            <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="notificationForm.scenes.wallet_recharge_success" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.notification.scenes.walletRechargeSuccess') }}
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="notificationForm.scenes.order_paid_success" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.notification.scenes.orderPaidSuccess') }}
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="notificationForm.scenes.manual_fulfillment_pending" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.notification.scenes.manualFulfillmentPending') }}
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input v-model="notificationForm.scenes.exception_alert" type="checkbox" class="h-4 w-4 accent-primary" />
-                {{ t('admin.settings.notification.scenes.exceptionAlert') }}
-              </label>
-            </div>
-            <p class="mt-3 text-xs text-muted-foreground">{{ t('admin.settings.notification.scenes.exceptionThresholdHint') }}</p>
-          </div>
-
-          <div class="rounded-xl border border-border">
-            <div class="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
-              <h3 class="text-sm font-semibold">{{ t('admin.settings.notification.templates.title') }}</h3>
-              <span class="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">{{ currentLang }}</span>
-            </div>
-            <div class="space-y-4 p-4">
-              <div class="rounded-lg border border-border bg-muted/10 p-4">
-                <h4 class="text-sm font-medium">{{ t('admin.settings.notification.scenes.walletRechargeSuccess') }}</h4>
-                <div class="mt-3 space-y-2">
-                  <Input v-model="notificationForm.templates.wallet_recharge_success[currentLang].title" :placeholder="t('admin.settings.notification.templates.titlePlaceholder')" />
-                  <Textarea v-model="notificationForm.templates.wallet_recharge_success[currentLang].body" rows="4" :placeholder="t('admin.settings.notification.templates.bodyPlaceholder')" />
-                </div>
-              </div>
-
-              <div class="rounded-lg border border-border bg-muted/10 p-4">
-                <h4 class="text-sm font-medium">{{ t('admin.settings.notification.scenes.orderPaidSuccess') }}</h4>
-                <div class="mt-3 space-y-2">
-                  <Input v-model="notificationForm.templates.order_paid_success[currentLang].title" :placeholder="t('admin.settings.notification.templates.titlePlaceholder')" />
-                  <Textarea v-model="notificationForm.templates.order_paid_success[currentLang].body" rows="4" :placeholder="t('admin.settings.notification.templates.bodyPlaceholder')" />
-                </div>
-              </div>
-
-              <div class="rounded-lg border border-border bg-muted/10 p-4">
-                <h4 class="text-sm font-medium">{{ t('admin.settings.notification.scenes.manualFulfillmentPending') }}</h4>
-                <div class="mt-3 space-y-2">
-                  <Input v-model="notificationForm.templates.manual_fulfillment_pending[currentLang].title" :placeholder="t('admin.settings.notification.templates.titlePlaceholder')" />
-                  <Textarea v-model="notificationForm.templates.manual_fulfillment_pending[currentLang].body" rows="4" :placeholder="t('admin.settings.notification.templates.bodyPlaceholder')" />
-                </div>
-              </div>
-
-              <div class="rounded-lg border border-border bg-muted/10 p-4">
-                <h4 class="text-sm font-medium">{{ t('admin.settings.notification.scenes.exceptionAlert') }}</h4>
-                <div class="mt-3 space-y-2">
-                  <Input v-model="notificationForm.templates.exception_alert[currentLang].title" :placeholder="t('admin.settings.notification.templates.titlePlaceholder')" />
-                  <Textarea v-model="notificationForm.templates.exception_alert[currentLang].body" rows="4" :placeholder="t('admin.settings.notification.templates.bodyPlaceholder')" />
-                </div>
-                <p class="mt-2 text-xs text-muted-foreground">{{ t('admin.settings.notification.templates.variableHint') }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div v-show="currentTab === 'notification'">
+      <SettingsNotificationTab ref="notificationTabRef" :data="notificationData" :current-lang="currentLang" @saved="fetchSettings" />
     </div>
 
 

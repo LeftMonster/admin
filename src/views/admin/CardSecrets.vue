@@ -1,31 +1,34 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useDebounceFn } from '@vueuse/core'
 import { adminAPI } from '@/api/admin'
+import type { AdminProduct, AdminProductSKU, AdminCardSecret, AdminCardSecretBatch } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDate, getLocalizedText } from '@/utils/format'
 import { confirmAction } from '@/utils/confirm'
+import CardSecretEditModal from './components/CardSecretEditModal.vue'
+import CardSecretBatchCreateModal from './components/CardSecretBatchCreateModal.vue'
 
 const { t } = useI18n()
 const adminPath = import.meta.env.VITE_ADMIN_PATH || ''
 
 const productKeyword = ref('')
-const productOptions = ref<any[]>([])
+const productOptions = ref<AdminProduct[]>([])
 const productOptionsLoading = ref(false)
 const selectedProductValue = ref('__all__')
-const productInfo = ref<any>(null)
+const productInfo = ref<AdminProduct | null>(null)
 const skuFilterValue = ref('__all__')
 
-const stats = ref<any>(null)
+const stats = ref<Record<string, unknown> | null>(null)
 const statsLoading = ref(false)
 
-const batches = ref<any[]>([])
+const batches = ref<AdminCardSecretBatch[]>([])
 const batchesLoading = ref(false)
 const batchPagination = ref({
   page: 1,
@@ -35,7 +38,7 @@ const batchPagination = ref({
 })
 const batchJumpPage = ref('')
 
-const cardSecrets = ref<any[]>([])
+const cardSecrets = ref<AdminCardSecret[]>([])
 const cardSecretsLoading = ref(false)
 const cardSecretStatus = ref('__all__')
 const cardSecretPagination = ref({
@@ -52,34 +55,8 @@ const batchActionLoading = ref(false)
 const batchActionError = ref('')
 const batchActionSuccess = ref('')
 
-const batchForm = ref({
-  secrets: '',
-  batch_no: '',
-  note: '',
-})
-const batchSubmitting = ref(false)
-const batchError = ref('')
-const batchSuccess = ref('')
-
-const importForm = ref({
-  file: null as File | null,
-  batch_no: '',
-  note: '',
-})
-const importSubmitting = ref(false)
-const importError = ref('')
-const importSuccess = ref('')
-const fileInput = ref<HTMLInputElement | null>(null)
-const importFileLabel = computed(() => importForm.value.file?.name || t('admin.cardSecrets.csvPlaceholder'))
-
 const showEditModal = ref(false)
-const editSubmitting = ref(false)
-const editError = ref('')
-const editForm = reactive({
-  id: 0,
-  secret: '',
-  status: 'available',
-})
+const editingCardSecret = ref<AdminCardSecret | null>(null)
 
 const normalizeFilterValue = (value: string) => (value === '__all__' ? '' : value)
 
@@ -97,9 +74,9 @@ const parseSkuId = () => {
   return Math.floor(parsed)
 }
 
-const formatSkuSpecValues = (specValues: any) => {
+const formatSkuSpecValues = (specValues: Record<string, string> | null | undefined) => {
   if (!specValues || typeof specValues !== 'object' || Array.isArray(specValues)) return ''
-  return Object.entries(specValues as Record<string, any>)
+  return Object.entries(specValues as Record<string, string>)
     .map(([key, value]) => {
       const keyText = String(key || '').trim()
       const valueText = Array.isArray(value)
@@ -113,7 +90,7 @@ const formatSkuSpecValues = (specValues: any) => {
     .join(' / ')
 }
 
-const buildSkuLabel = (sku: any) => {
+const buildSkuLabel = (sku: AdminProductSKU | null | undefined) => {
   const skuCode = String(sku?.sku_code || '').trim()
   const specText = formatSkuSpecValues(sku?.spec_values)
   if (skuCode && specText) return `${skuCode} · ${specText}`
@@ -123,7 +100,7 @@ const buildSkuLabel = (sku: any) => {
   return '-'
 }
 
-const buildProductLabel = (product: any) => {
+const buildProductLabel = (product: AdminProduct | null | undefined) => {
   const id = Number(product?.id || 0)
   const name = getLocalizedText(product?.title || {})
   if (id > 0 && name) return `#${id} ${name}`
@@ -141,7 +118,7 @@ const productHint = computed(() => {
 
 const productInfoName = computed(() => {
   if (productInfo.value) return getLocalizedText(productInfo.value.title)
-  const option = productOptions.value.find((item: any) => Number(item?.id || 0) === currentProductId.value)
+  const option = productOptions.value.find((item: AdminProduct) => Number(item?.id || 0) === currentProductId.value)
   if (!option) return ''
   return getLocalizedText(option.title || {})
 })
@@ -149,24 +126,20 @@ const productInfoName = computed(() => {
 const availableSkus = computed(() => {
   const rows = Array.isArray(productInfo.value?.skus) ? productInfo.value.skus : []
   return rows
-    .filter((sku: any) => Boolean(sku?.is_active))
-    .map((sku: any) => ({
+    .filter((sku: AdminProductSKU) => Boolean(sku?.is_active))
+    .map((sku: AdminProductSKU) => ({
       ...sku,
       id: Number(sku.id),
       label: buildSkuLabel(sku),
     }))
-    .filter((sku: any) => Number.isFinite(sku.id) && sku.id > 0)
+    .filter((sku: AdminProductSKU & { label: string }) => Number.isFinite(sku.id) && sku.id > 0)
 })
 
 const skuFilterDisabled = computed(() => !currentProductId.value || availableSkus.value.length === 0)
 
-const selectedSkuRequired = computed(() => {
-  return Boolean(currentProductId.value) && availableSkus.value.length > 1 && currentSkuId.value <= 0
-})
-
 const allCurrentPageSelected = computed(() => {
   if (cardSecrets.value.length === 0) return false
-  return cardSecrets.value.every((item: any) => selectedSecretIds.value.includes(Number(item?.id || 0)))
+  return cardSecrets.value.every((item: AdminCardSecret) => selectedSecretIds.value.includes(Number(item?.id || 0)))
 })
 
 const hasSelectedSecrets = computed(() => selectedSecretIds.value.length > 0)
@@ -180,7 +153,7 @@ const syncSkuSelection = () => {
     skuFilterValue.value = String(availableSkus.value[0].id)
     return
   }
-  const matched = availableSkus.value.some((sku: any) => sku.id === currentSkuId.value)
+  const matched = availableSkus.value.some((sku) => sku.id === currentSkuId.value)
   if (!matched) {
     skuFilterValue.value = '__all__'
   }
@@ -188,7 +161,7 @@ const syncSkuSelection = () => {
 
 const resolveSkuLabelById = (skuID: number) => {
   if (!skuID) return '-'
-  const target = availableSkus.value.find((sku: any) => sku.id === skuID)
+  const target = availableSkus.value.find((sku) => sku.id === skuID)
   if (!target) return `#${skuID}`
   return target.label
 }
@@ -198,7 +171,7 @@ const resolveProductName = (productId: number) => {
   if (productInfo.value && Number(productInfo.value.id || 0) === productId) {
     return getLocalizedText(productInfo.value.title)
   }
-  const option = productOptions.value.find((item: any) => Number(item?.id || 0) === productId)
+  const option = productOptions.value.find((item: AdminProduct) => Number(item?.id || 0) === productId)
   if (!option) return ''
   return getLocalizedText(option.title || {})
 }
@@ -228,7 +201,7 @@ const toggleSelectAllSecrets = () => {
     return
   }
   selectedSecretIds.value = cardSecrets.value
-    .map((item: any) => Number(item?.id || 0))
+    .map((item: AdminCardSecret) => Number(item?.id || 0))
     .filter((item: number) => Number.isFinite(item) && item > 0)
 }
 
@@ -236,7 +209,7 @@ const loadProductOptions = async () => {
   productOptionsLoading.value = true
   try {
     const keyword = String(productKeyword.value || '').trim()
-    const rows: any[] = []
+    const rows: AdminProduct[] = []
     let page = 1
     let totalPage = 1
     do {
@@ -247,13 +220,13 @@ const loadProductOptions = async () => {
         fulfillment_type: 'auto',
       })
       const list = Array.isArray(response.data.data) ? response.data.data : []
-      rows.push(...list.filter((item: any) => String(item?.fulfillment_type || '').trim() === 'auto'))
+      rows.push(...list.filter((item: AdminProduct) => String(item?.fulfillment_type || '').trim() === 'auto'))
       totalPage = Number(response.data?.pagination?.total_page || 1)
       page += 1
     } while (page <= totalPage && page <= 20)
 
-    const dedup = new Map<number, any>()
-    rows.forEach((item: any) => {
+    const dedup = new Map<number, AdminProduct>()
+    rows.forEach((item: AdminProduct) => {
       const id = Number(item?.id || 0)
       if (!Number.isFinite(id) || id <= 0) return
       if (!dedup.has(id)) dedup.set(id, item)
@@ -262,7 +235,7 @@ const loadProductOptions = async () => {
     const options = Array.from(dedup.values())
     if (
       currentProductId.value &&
-      !options.some((item: any) => Number(item?.id || 0) === currentProductId.value)
+      !options.some((item: AdminProduct) => Number(item?.id || 0) === currentProductId.value)
     ) {
       if (productInfo.value && Number(productInfo.value.id || 0) === currentProductId.value) {
         options.unshift(productInfo.value)
@@ -275,7 +248,7 @@ const loadProductOptions = async () => {
             'en-US': `#${currentProductId.value}`,
           },
           fulfillment_type: 'auto',
-        })
+        } as AdminProduct)
       }
     }
 
@@ -297,7 +270,7 @@ const loadProductInfo = async () => {
   try {
     const response = await adminAPI.getProduct(productId)
     productInfo.value = response.data.data
-    if (!productOptions.value.some((item: any) => Number(item?.id || 0) === productId)) {
+    if (!productOptions.value.some((item: AdminProduct) => Number(item?.id || 0) === productId)) {
       productOptions.value.unshift(response.data.data)
     }
     syncSkuSelection()
@@ -347,7 +320,7 @@ const fetchBatches = async (page = 1) => {
       page,
       page_size: batchPagination.value.page_size,
     })
-    batches.value = (response.data.data as any[]) || []
+    batches.value = response.data.data || []
     batchPagination.value = response.data.pagination || batchPagination.value
   } catch {
     batches.value = []
@@ -360,7 +333,7 @@ const fetchCardSecrets = async (page = 1) => {
   const productId = parseProductId()
   cardSecretsLoading.value = true
   try {
-    const params: Record<string, any> = {
+    const params: Record<string, unknown> = {
       status: normalizeFilterValue(cardSecretStatus.value) || undefined,
       page,
       page_size: cardSecretPagination.value.page_size,
@@ -370,7 +343,7 @@ const fetchCardSecrets = async (page = 1) => {
       params.sku_id = currentSkuId.value || undefined
     }
     const response = await adminAPI.getCardSecrets(params)
-    cardSecrets.value = (response.data.data as any[]) || []
+    cardSecrets.value = response.data.data || []
     cardSecretPagination.value = response.data.pagination || cardSecretPagination.value
     selectedSecretIds.value = []
   } catch {
@@ -413,6 +386,7 @@ const refreshAfterBatchMutations = async () => {
 const handleSearchProducts = async () => {
   await loadProductOptions()
 }
+const debouncedSearchProducts = useDebounceFn(handleSearchProducts, 300)
 
 const handleProductSelectionChange = async () => {
   skuFilterValue.value = '__all__'
@@ -531,7 +505,7 @@ const exportSelectedSecrets = async (format: 'txt' | 'csv') => {
 
   batchActionLoading.value = true
   try {
-    const response: any = await adminAPI.exportCardSecrets({
+    const response = await adminAPI.exportCardSecrets({
       ids,
       format,
     })
@@ -564,145 +538,17 @@ const exportSelectedSecrets = async (format: 'txt' | 'csv') => {
   }
 }
 
-const openEditSecret = (secret: any) => {
-  editForm.id = secret.id
-  editForm.secret = secret.secret || ''
-  editForm.status = secret.status || 'available'
-  editError.value = ''
+const openEditSecret = (secret: AdminCardSecret) => {
+  editingCardSecret.value = secret
   showEditModal.value = true
 }
 
-const closeEditModal = () => {
-  showEditModal.value = false
-  editError.value = ''
+const handleEditSuccess = async () => {
+  await refreshAfterBatchMutations()
 }
 
-const submitEdit = async () => {
-  if (!editForm.id) return
-  editSubmitting.value = true
-  editError.value = ''
-  try {
-    await adminAPI.updateCardSecret(editForm.id, {
-      secret: editForm.secret,
-      status: editForm.status,
-    })
-    closeEditModal()
-    await refreshAfterBatchMutations()
-  } catch (error: any) {
-    editError.value = error?.message || t('admin.cardSecrets.errors.updateFailed')
-  } finally {
-    editSubmitting.value = false
-  }
-}
-
-const resetBatchForm = () => {
-  batchForm.value.secrets = ''
-  batchForm.value.batch_no = ''
-  batchForm.value.note = ''
-  batchError.value = ''
-  batchSuccess.value = ''
-}
-
-const handleBatchCreate = async () => {
-  batchError.value = ''
-  batchSuccess.value = ''
-  const productId = parseProductId()
-  if (!productId) {
-    batchError.value = t('admin.cardSecrets.errors.productRequired')
-    return
-  }
-  if (selectedSkuRequired.value) {
-    batchError.value = t('admin.cardSecrets.errors.skuRequired')
-    return
-  }
-  const secrets = batchForm.value.secrets
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter((item) => item)
-  if (!secrets.length) {
-    batchError.value = t('admin.cardSecrets.errors.secretsRequired')
-    return
-  }
-
-  batchSubmitting.value = true
-  try {
-    await adminAPI.createCardSecretBatch({
-      product_id: productId,
-      sku_id: currentSkuId.value || undefined,
-      secrets,
-      batch_no: batchForm.value.batch_no.trim(),
-      note: batchForm.value.note.trim(),
-    })
-    batchSuccess.value = t('admin.cardSecrets.success.batchCreated')
-    batchForm.value.secrets = ''
-    await refreshAll()
-  } catch (err: any) {
-    batchError.value = err.message || t('admin.cardSecrets.errors.batchFailed')
-  } finally {
-    batchSubmitting.value = false
-  }
-}
-
-const handleFileChange = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const file = target.files && target.files[0]
-  importForm.value.file = file || null
-}
-
-const triggerImportFile = () => {
-  fileInput.value?.click()
-}
-
-const clearImportFile = () => {
-  importForm.value.file = null
-  if (fileInput.value) fileInput.value.value = ''
-}
-
-const resetImportForm = () => {
-  clearImportFile()
-  importForm.value.batch_no = ''
-  importForm.value.note = ''
-  importError.value = ''
-  importSuccess.value = ''
-  if (fileInput.value) fileInput.value.value = ''
-}
-
-const handleImport = async () => {
-  importError.value = ''
-  importSuccess.value = ''
-  const productId = parseProductId()
-  if (!productId) {
-    importError.value = t('admin.cardSecrets.errors.productRequired')
-    return
-  }
-  if (selectedSkuRequired.value) {
-    importError.value = t('admin.cardSecrets.errors.skuRequired')
-    return
-  }
-  if (!importForm.value.file) {
-    importError.value = t('admin.cardSecrets.errors.fileRequired')
-    return
-  }
-
-  importSubmitting.value = true
-  try {
-    const formData = new FormData()
-    formData.append('product_id', String(productId))
-    if (currentSkuId.value > 0) {
-      formData.append('sku_id', String(currentSkuId.value))
-    }
-    formData.append('batch_no', importForm.value.batch_no.trim())
-    formData.append('note', importForm.value.note.trim())
-    formData.append('file', importForm.value.file)
-    await adminAPI.importCardSecretCSV(formData)
-    importSuccess.value = t('admin.cardSecrets.success.imported')
-    resetImportForm()
-    await refreshAll()
-  } catch (err: any) {
-    importError.value = err.message || t('admin.cardSecrets.errors.importFailed')
-  } finally {
-    importSubmitting.value = false
-  }
+const handleBatchCreateSuccess = async () => {
+  await refreshAll()
 }
 
 const cardSecretStatusLabel = (status: string) => {
@@ -727,11 +573,11 @@ const cardSecretStatusClass = (status: string) => {
   }
 }
 
-const batchSkuLabel = (batch: any) => {
+const batchSkuLabel = (batch: AdminCardSecretBatch) => {
   return resolveSkuLabelById(Number(batch?.sku_id || 0))
 }
 
-const secretSkuLabel = (secret: any) => {
+const secretSkuLabel = (secret: AdminCardSecret) => {
   return resolveSkuLabelById(Number(secret?.sku_id || 0))
 }
 
@@ -753,6 +599,7 @@ onMounted(async () => {
           <Input
             v-model="productKeyword"
             :placeholder="t('admin.cardSecrets.productSearchPlaceholder')"
+            @update:modelValue="debouncedSearchProducts"
             @keyup.enter="handleSearchProducts"
           />
           <Button
@@ -820,77 +667,12 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="rounded-xl border border-border bg-card p-6">
-        <h2 class="text-lg font-semibold text-foreground mb-4">{{ t('admin.cardSecrets.batchTitle') }}</h2>
-        <form class="space-y-4" @submit.prevent="handleBatchCreate">
-          <div>
-            <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.cardSecrets.secretsLabel') }} *</label>
-            <Textarea v-model="batchForm.secrets" rows="6" :placeholder="t('admin.cardSecrets.secretsPlaceholder')" />
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.cardSecrets.batchNoLabel') }}</label>
-              <Input v-model="batchForm.batch_no" placeholder="BATCH-20260203-001" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.cardSecrets.noteLabel') }}</label>
-              <Input v-model="batchForm.note" :placeholder="t('admin.cardSecrets.notePlaceholder')" />
-            </div>
-          </div>
-          <div v-if="batchError" class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {{ batchError }}
-          </div>
-          <div v-if="batchSuccess" class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-            {{ batchSuccess }}
-          </div>
-          <div class="flex justify-end gap-3">
-            <Button type="button" variant="outline" @click="resetBatchForm">{{ t('admin.common.reset') }}</Button>
-            <Button type="submit" :disabled="batchSubmitting">
-              {{ batchSubmitting ? t('admin.cardSecrets.submitting') : t('admin.cardSecrets.submitBatch') }}
-            </Button>
-          </div>
-        </form>
-      </div>
-
-      <div class="rounded-xl border border-border bg-card p-6">
-        <h2 class="text-lg font-semibold text-foreground mb-4">{{ t('admin.cardSecrets.importTitle') }}</h2>
-        <form class="space-y-4" @submit.prevent="handleImport">
-          <div>
-            <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.cardSecrets.csvLabel') }} *</label>
-            <div class="flex flex-wrap items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm">
-              <Button type="button" size="sm" variant="outline" @click="triggerImportFile">{{ t('admin.cardSecrets.csvChoose') }}</Button>
-              <span class="flex-1 truncate" :class="importForm.file ? 'text-foreground' : 'text-muted-foreground'">{{ importFileLabel }}</span>
-              <Button v-if="importForm.file" type="button" size="sm" variant="ghost" @click="clearImportFile">{{ t('admin.cardSecrets.csvClear') }}</Button>
-            </div>
-            <input ref="fileInput" type="file" accept=".csv" class="hidden" @change="handleFileChange" />
-            <p class="mt-2 text-xs text-muted-foreground">{{ t('admin.cardSecrets.csvHint') }}</p>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.cardSecrets.batchNoLabel') }}</label>
-              <Input v-model="importForm.batch_no" placeholder="BATCH-20260203-002" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.cardSecrets.noteLabel') }}</label>
-              <Input v-model="importForm.note" :placeholder="t('admin.cardSecrets.importNotePlaceholder')" />
-            </div>
-          </div>
-          <div v-if="importError" class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {{ importError }}
-          </div>
-          <div v-if="importSuccess" class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-            {{ importSuccess }}
-          </div>
-          <div class="flex justify-end gap-3">
-            <Button type="button" variant="outline" @click="resetImportForm">{{ t('admin.common.reset') }}</Button>
-            <Button type="submit" :disabled="importSubmitting">
-              {{ importSubmitting ? t('admin.cardSecrets.importing') : t('admin.cardSecrets.startImport') }}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <CardSecretBatchCreateModal
+      :model-value="!!currentProductId"
+      :product-id="currentProductId || 0"
+      :sku-id="currentSkuId"
+      @success="handleBatchCreateSuccess"
+    />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="rounded-xl border border-border bg-card p-6">
@@ -924,7 +706,9 @@ onMounted(async () => {
           </TableHeader>
           <TableBody class="divide-y divide-border">
             <TableRow v-if="batchesLoading">
-              <TableCell colspan="6" class="px-4 py-6 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+              <TableCell :colspan="6" class="p-0">
+                <TableSkeleton :columns="6" :rows="5" />
+              </TableCell>
             </TableRow>
             <TableRow v-else-if="batches.length === 0">
               <TableCell colspan="6" class="px-4 py-6 text-center text-muted-foreground">{{ t('admin.cardSecrets.emptyBatches') }}</TableCell>
@@ -1072,7 +856,9 @@ onMounted(async () => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="cardSecretsLoading">
-            <TableCell colspan="10" class="px-4 py-6 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="10" class="p-0">
+              <TableSkeleton :columns="10" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="cardSecrets.length === 0">
             <TableCell colspan="10" class="px-4 py-6 text-center text-muted-foreground">{{ t('admin.cardSecrets.emptyList') }}</TableCell>
@@ -1179,45 +965,10 @@ onMounted(async () => {
       </div>
     </div>
 
-    <Dialog v-model:open="showEditModal" @update:open="(value) => { if (!value) closeEditModal() }">
-      <DialogScrollContent class="w-full max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{{ t('admin.cardSecrets.editTitle') }}</DialogTitle>
-        </DialogHeader>
-        <form class="space-y-4" @submit.prevent="submitEdit">
-          <div class="text-xs text-muted-foreground flex items-center gap-2">
-            <span>{{ t('admin.cardSecrets.editId') }}：</span>
-            <IdCell v-if="editForm.id" :value="editForm.id" />
-            <span v-else>-</span>
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.cardSecrets.editSecret') }}</label>
-            <Textarea v-model="editForm.secret" rows="3" :placeholder="t('admin.cardSecrets.editSecretPlaceholder')" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.cardSecrets.editStatus') }}</label>
-            <Select v-model="editForm.status">
-              <SelectTrigger class="h-9 w-full">
-                <SelectValue :placeholder="t('admin.cardSecrets.status.available')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="available">{{ t('admin.cardSecrets.status.available') }}</SelectItem>
-                <SelectItem value="reserved">{{ t('admin.cardSecrets.status.reserved') }}</SelectItem>
-                <SelectItem value="used">{{ t('admin.cardSecrets.status.used') }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div v-if="editError" class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {{ editError }}
-          </div>
-          <div class="flex justify-end gap-3">
-            <Button type="button" variant="outline" @click="closeEditModal">{{ t('admin.common.cancel') }}</Button>
-            <Button type="submit" :disabled="editSubmitting">
-              {{ editSubmitting ? t('admin.common.loading') : t('admin.common.save') }}
-            </Button>
-          </div>
-        </form>
-      </DialogScrollContent>
-    </Dialog>
+    <CardSecretEditModal
+      v-model="showEditModal"
+      :card-secret="editingCardSecret"
+      @success="handleEditSuccess"
+    />
   </div>
 </template>

@@ -8,19 +8,33 @@ import {
   type AdminGiftCardStatus,
   type AdminUpdateGiftCardPayload,
 } from '@/api/admin'
+import type { AdminGiftCard, AdminGiftCardBatch } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDate } from '@/utils/format'
 import { confirmAction } from '@/utils/confirm'
 
+interface RedeemedUser {
+  id?: number
+  display_name?: string
+  email?: string
+}
+
+type GiftCardWithRelations = AdminGiftCard & {
+  is_expired?: boolean
+  redeemed_user?: RedeemedUser
+  batch?: AdminGiftCardBatch & { batch_no?: string }
+}
+
 const { t } = useI18n()
 
 const loading = ref(true)
-const cards = ref<any[]>([])
+const cards = ref<GiftCardWithRelations[]>([])
 const pagination = ref({
   page: 1,
   page_size: 20,
@@ -56,7 +70,7 @@ const generateForm = reactive({
 const showEditModal = ref(false)
 const editSubmitting = ref(false)
 const editError = ref('')
-const editingCard = ref<any | null>(null)
+const editingCard = ref<GiftCardWithRelations | null>(null)
 const editForm = reactive({
   name: '',
   status: 'active',
@@ -87,7 +101,7 @@ const formatMoney = (amount?: string, currency?: string) => {
   return `${amount} ${currency || ''}`.trim()
 }
 
-const statusLabel = (card: any) => {
+const statusLabel = (card: GiftCardWithRelations) => {
   const status = String(card?.status || '').toLowerCase()
   if (status === 'active' && card?.is_expired) {
     return t('admin.giftCards.status.expired')
@@ -98,7 +112,7 @@ const statusLabel = (card: any) => {
   return translated
 }
 
-const statusClass = (card: any) => {
+const statusClass = (card: GiftCardWithRelations) => {
   const status = String(card?.status || '').toLowerCase()
   if (status === 'active' && card?.is_expired) {
     return 'text-amber-700 border-amber-200 bg-amber-50'
@@ -115,7 +129,7 @@ const statusClass = (card: any) => {
   return 'text-muted-foreground border-border bg-muted/30'
 }
 
-const redeemedUserText = (card: any) => {
+const redeemedUserText = (card: GiftCardWithRelations) => {
   const user = card?.redeemed_user
   if (!user) return '-'
   const id = Number(user.id || 0)
@@ -127,7 +141,7 @@ const redeemedUserText = (card: any) => {
   return id > 0 ? `#${id}` : '-'
 }
 
-const expiresAtText = (card: any) => {
+const expiresAtText = (card: GiftCardWithRelations) => {
   if (!card?.expires_at) return t('admin.giftCards.neverExpire')
   return formatDate(card.expires_at) || t('admin.giftCards.neverExpire')
 }
@@ -150,7 +164,7 @@ const normalizeSelectedIDs = () => {
 
 const allCurrentPageSelected = computed(() => {
   if (!cards.value.length) return false
-  return cards.value.every((item: any) => selectedCardIDs.value.includes(Number(item?.id || 0)))
+  return cards.value.every((item) => selectedCardIDs.value.includes(Number(item?.id || 0)))
 })
 
 const hasSelectedCards = computed(() => normalizeSelectedIDs().length > 0)
@@ -161,8 +175,8 @@ const toggleSelectAllCards = () => {
     return
   }
   selectedCardIDs.value = cards.value
-    .map((item: any) => Number(item?.id || 0))
-    .filter((id: number) => Number.isFinite(id) && id > 0)
+    .map((item) => Number(item?.id || 0))
+    .filter((id) => Number.isFinite(id) && id > 0)
 }
 
 const onRowSelectChange = (rawID: number | string, event: Event) => {
@@ -180,7 +194,7 @@ const fetchGiftCards = async (page = 1) => {
   loading.value = true
   clearBatchMessages()
   try {
-    const params: Record<string, any> = {
+    const params: Record<string, unknown> = {
       page,
       page_size: pagination.value.page_size,
       code: String(filters.code || '').trim() || undefined,
@@ -193,7 +207,7 @@ const fetchGiftCards = async (page = 1) => {
       params.redeemed_user_id = Math.floor(redeemedUserID)
     }
     const response = await adminAPI.getGiftCards(params)
-    cards.value = (response.data.data as any[]) || []
+    cards.value = (response.data.data as GiftCardWithRelations[]) || []
     pagination.value = response.data.pagination || pagination.value
     selectedCardIDs.value = []
   } catch {
@@ -270,7 +284,7 @@ const exportSelected = async (format: 'txt' | 'csv') => {
   batchActionLoading.value = true
   try {
     const payload: AdminExportGiftCardsPayload = { ids, format }
-    const response: any = await adminAPI.exportGiftCards(payload)
+    const response = await adminAPI.exportGiftCards(payload) as { data: string; headers?: Record<string, string> }
     const contentDisposition = String(response?.headers?.['content-disposition'] || '')
     const filenameMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i)
     const fallbackName = `gift-cards-${new Date().toISOString().replace(/[:.]/g, '-')}.${format}`
@@ -351,7 +365,7 @@ const submitGenerate = async () => {
   }
 }
 
-const openEditModal = (card: any) => {
+const openEditModal = (card: GiftCardWithRelations) => {
   editingCard.value = card
   editForm.name = String(card?.name || '')
   const normalizedStatus = String(card?.status || '').toLowerCase()
@@ -409,7 +423,7 @@ const submitEdit = async () => {
   }
 }
 
-const handleDelete = async (card: any) => {
+const handleDelete = async (card: GiftCardWithRelations) => {
   const confirmed = await confirmAction({
     description: t('admin.giftCards.confirmDelete', { code: card.code }),
     confirmText: t('admin.common.delete'),
@@ -533,7 +547,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="12" class="px-4 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="12" class="p-0">
+              <TableSkeleton :columns="12" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="cards.length === 0">
             <TableCell colspan="12" class="px-4 py-8 text-center text-muted-foreground">{{ t('admin.giftCards.empty') }}</TableCell>

@@ -1,20 +1,23 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminPayment } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { paymentStatusClass, paymentStatusLabel } from '@/utils/status'
 import { formatDate, toRFC3339 } from '@/utils/format'
 
 const loading = ref(true)
-const payments = ref<any[]>([])
+const payments = ref<AdminPayment[]>([])
 const pagination = ref({
   page: 1,
   page_size: 20,
@@ -38,7 +41,7 @@ const route = useRoute()
 const showDetail = ref(false)
 const detailLoading = ref(false)
 const detailError = ref('')
-const detailPayment = ref<any>(null)
+const detailPayment = ref<AdminPayment | null>(null)
 const exporting = ref(false)
 const exportError = ref('')
 
@@ -56,7 +59,7 @@ const fetchPayments = async (page = 1) => {
       created_from: toRFC3339(filters.createdFrom),
       created_to: toRFC3339(filters.createdTo),
     })
-    payments.value = (response.data.data as any[]) || []
+    payments.value = response.data.data || []
     pagination.value = response.data.pagination || pagination.value
   } catch (error) {
     payments.value = []
@@ -68,6 +71,7 @@ const fetchPayments = async (page = 1) => {
 const handleSearch = () => {
   fetchPayments(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const refresh = () => {
   fetchPayments(pagination.value.page)
@@ -120,7 +124,7 @@ const handleExport = async () => {
   }
 }
 
-const openDetail = async (payment: any) => {
+const openDetail = async (payment: { id: number }) => {
   showDetail.value = true
   detailLoading.value = true
   detailError.value = ''
@@ -204,7 +208,7 @@ const formatMoney = (value: string | number | null | undefined, currency?: strin
   return `${value}${displayCurrency}`
 }
 
-const formatPayload = (payload: any) => {
+const formatPayload = (payload: unknown) => {
   if (!payload) return '-'
   try {
     return JSON.stringify(payload, null, 2)
@@ -254,13 +258,13 @@ watch(
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="w-full md:w-32">
-          <Input v-model="filters.userId" :placeholder="t('admin.payments.filterUserId')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.userId" :placeholder="t('admin.payments.filterUserId')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-48">
-          <Input v-model="filters.orderId" :placeholder="t('admin.payments.filterOrderId')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.orderId" :placeholder="t('admin.payments.filterOrderId')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-48">
-          <Input v-model="filters.channelId" :placeholder="t('admin.payments.filterChannelId')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.channelId" :placeholder="t('admin.payments.filterChannelId')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-40">
           <Select v-model="filters.providerType" @update:modelValue="handleSearch">
@@ -339,7 +343,9 @@ watch(
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="9" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="9" class="p-0">
+              <TableSkeleton :columns="9" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="payments.length === 0">
             <TableCell colspan="9" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.payments.empty') }}</TableCell>

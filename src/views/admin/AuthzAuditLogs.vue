@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useDebounceFn } from '@vueuse/core'
 import { adminAPI, type AdminAuthzAuditLog } from '@/api/admin'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { notifyError } from '@/utils/notify'
 import { formatDate, toRFC3339 } from '@/utils/format'
 
@@ -186,6 +188,7 @@ const fetchLogs = async (page = 1) => {
 const handleSearch = () => {
   fetchLogs(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const handleReset = () => {
   filters.operator_admin_id = ''
@@ -218,17 +221,17 @@ onMounted(() => {
 
     <section class="rounded-xl border border-border bg-card p-4 space-y-3">
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Input v-model="filters.operator_admin_id" type="number" min="1" :placeholder="text.filters.operator" class="h-9" />
-        <Input v-model="filters.target_admin_id" type="number" min="1" :placeholder="text.filters.target" class="h-9" />
+        <Input v-model="filters.operator_admin_id" type="number" min="1" :placeholder="text.filters.operator" class="h-9" @update:modelValue="debouncedSearch" />
+        <Input v-model="filters.target_admin_id" type="number" min="1" :placeholder="text.filters.target" class="h-9" @update:modelValue="debouncedSearch" />
         <select v-model="filters.action" class="h-9 rounded-md border border-input bg-background px-3 text-sm">
           <option value="">{{ text.filters.allActions }}</option>
           <option v-for="item in actionOptions" :key="item" :value="item">{{ item }}</option>
         </select>
-        <Input v-model="filters.role" type="text" :placeholder="text.filters.role" class="h-9" />
+        <Input v-model="filters.role" type="text" :placeholder="text.filters.role" class="h-9" @update:modelValue="debouncedSearch" />
       </div>
 
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Input v-model="filters.object" type="text" :placeholder="text.filters.object" class="h-9" />
+        <Input v-model="filters.object" type="text" :placeholder="text.filters.object" class="h-9" @update:modelValue="debouncedSearch" />
         <select v-model="filters.method" class="h-9 rounded-md border border-input bg-background px-3 text-sm">
           <option value="">{{ text.filters.allMethods }}</option>
           <option v-for="item in methodOptions" :key="item" :value="item">{{ item }}</option>
@@ -261,7 +264,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="9" class="px-4 py-6 text-center text-muted-foreground">{{ text.table.loading }}</TableCell>
+            <TableCell :colspan="9" class="p-0">
+              <TableSkeleton :columns="9" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="logs.length === 0">
             <TableCell colspan="9" class="px-4 py-6 text-center text-muted-foreground">{{ text.table.empty }}</TableCell>

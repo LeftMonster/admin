@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminAffiliateWithdraw } from '@/api/types'
 import {
   AFFILIATE_WITHDRAW_STATUS_PAID,
   AFFILIATE_WITHDRAW_STATUS_PENDING_REVIEW,
@@ -11,6 +13,7 @@ import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { confirmAction } from '@/utils/confirm'
 import { notifyError, notifySuccess } from '@/utils/notify'
@@ -19,7 +22,7 @@ import { formatDate } from '@/utils/format'
 const { t } = useI18n()
 const loading = ref(true)
 const operating = ref(false)
-const rows = ref<any[]>([])
+const rows = ref<AdminAffiliateWithdraw[]>([])
 const jumpPage = ref('')
 const pagination = ref({
   page: 1,
@@ -46,7 +49,7 @@ const fetchRows = async (page = 1) => {
       affiliate_profile_id: filters.affiliateProfileId || undefined,
       status: normalizeFilterValue(filters.status) || undefined,
     })
-    rows.value = (response.data.data as any[]) || []
+    rows.value = response.data.data || []
     pagination.value = response.data.pagination || pagination.value
   } catch {
     rows.value = []
@@ -58,6 +61,7 @@ const fetchRows = async (page = 1) => {
 const handleSearch = () => {
   fetchRows(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const refreshCurrentPage = () => {
   fetchRows(pagination.value.page)
@@ -91,7 +95,7 @@ const statusClass = (status?: string) => {
   return 'border-border bg-muted/30 text-muted-foreground'
 }
 
-const rejectWithdraw = async (row: any) => {
+const rejectWithdraw = async (row: AdminAffiliateWithdraw) => {
   const confirmed = await confirmAction({
     description: t('admin.affiliatesWithdraws.actions.rejectConfirm', { id: row.id }),
     variant: 'destructive',
@@ -111,7 +115,7 @@ const rejectWithdraw = async (row: any) => {
   }
 }
 
-const payWithdraw = async (row: any) => {
+const payWithdraw = async (row: AdminAffiliateWithdraw) => {
   const confirmed = await confirmAction({ description: t('admin.affiliatesWithdraws.actions.payConfirm', { id: row.id }) })
   if (!confirmed) return
   operating.value = true
@@ -140,10 +144,10 @@ onMounted(() => {
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="w-full md:w-56">
-          <Input v-model="filters.keyword" :placeholder="t('admin.affiliatesWithdraws.filters.keyword')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.keyword" :placeholder="t('admin.affiliatesWithdraws.filters.keyword')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-44">
-          <Input v-model="filters.affiliateProfileId" :placeholder="t('admin.affiliatesWithdraws.filters.profileId')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.affiliateProfileId" :placeholder="t('admin.affiliatesWithdraws.filters.profileId')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-48">
           <Select v-model="filters.status" @update:modelValue="handleSearch">
@@ -181,7 +185,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="10" class="p-0">
+              <TableSkeleton :columns="10" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="rows.length === 0">
             <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.affiliatesWithdraws.empty') }}</TableCell>

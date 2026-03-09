@@ -1,22 +1,27 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminBanner, LocalizedText } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getImageUrl } from '@/utils/image'
 import { notifyError } from '@/utils/notify'
 import { confirmAction } from '@/utils/confirm'
+import { useFormValidation, rules } from '@/composables/useFormValidation'
 
 const { t } = useI18n()
 const route = useRoute()
 const loading = ref(false)
 const uploading = ref(false)
+const submitting = ref(false)
 const showModal = ref(false)
 const isEditing = ref(false)
 const currentLang = ref('zh-CN')
@@ -44,7 +49,7 @@ const positionOptions = computed(() => [
   { label: t('admin.banners.positions.homeHero'), value: 'home_hero' },
 ])
 
-const banners = ref<any[]>([])
+const banners = ref<AdminBanner[]>([])
 const pagination = reactive({
   page: 1,
   page_size: 10,
@@ -63,8 +68,8 @@ const form = reactive({
   id: 0,
   name: '',
   position: 'home_hero',
-  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
-  subtitle: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
+  title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
+  subtitle: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
   image: '',
   mobile_image: '',
   link_type: 'none',
@@ -76,7 +81,13 @@ const form = reactive({
   sort_order: 0,
 })
 
-const getLocalizedText = (jsonData: any) => {
+const { errors, validate, clearErrors } = useFormValidation({
+  name: [rules.required('This field is required')],
+  position: [rules.required('This field is required')],
+  image: [rules.required('This field is required')],
+})
+
+const getLocalizedText = (jsonData: LocalizedText | null | undefined) => {
   if (!jsonData) return ''
   return jsonData[currentLang.value] || jsonData['zh-CN'] || jsonData['en-US'] || ''
 }
@@ -123,8 +134,8 @@ const fetchBanners = async (page = 1) => {
       position: filters.position || undefined,
       is_active: isActiveValue,
     })
-    banners.value = (res.data.data as any[]) || []
-    const p = (res.data as any).pagination
+    banners.value = res.data.data || []
+    const p = res.data.pagination
     if (p) {
       pagination.page = p.page
       pagination.page_size = p.page_size
@@ -141,6 +152,7 @@ const fetchBanners = async (page = 1) => {
 const handleSearch = () => {
   fetchBanners(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const changePage = (page: number) => {
   if (page < 1 || page > pagination.total_page) return
@@ -179,10 +191,11 @@ const resetForm = () => {
 const openCreateModal = () => {
   isEditing.value = false
   resetForm()
+  clearErrors()
   showModal.value = true
 }
 
-const openEditModal = (banner: any) => {
+const openEditModal = (banner: AdminBanner) => {
   isEditing.value = true
   currentLang.value = 'zh-CN'
   Object.assign(form, {
@@ -214,6 +227,7 @@ const openEditModal = (banner: any) => {
 
 const closeModal = () => {
   showModal.value = false
+  clearErrors()
 }
 
 const buildPayload = () => ({
@@ -233,6 +247,8 @@ const buildPayload = () => ({
 })
 
 const handleSubmit = async () => {
+  if (!validate({ name: form.name, position: form.position, image: form.image } as Record<string, unknown>)) return
+  submitting.value = true
   try {
     const payload = buildPayload()
     if (isEditing.value && form.id) {
@@ -244,10 +260,12 @@ const handleSubmit = async () => {
     fetchBanners(1)
   } catch (err: any) {
     notifyError(t('admin.banners.errors.operationFailed', { message: err?.message || '' }))
+  } finally {
+    submitting.value = false
   }
 }
 
-const handleDelete = async (banner: any) => {
+const handleDelete = async (banner: AdminBanner) => {
   const confirmed = await confirmAction({
     description: t('admin.banners.confirmDelete', { name: banner.name || '#' + banner.id }),
     confirmText: t('admin.common.delete'),
@@ -274,7 +292,7 @@ const handleFileChange = async (event: Event) => {
     const formData = new FormData()
     formData.append('file', file)
     const res = await adminAPI.upload(formData, 'banner')
-    form.image = (res.data.data as any)?.url || ''
+    form.image = (res.data.data as Record<string, string>)?.url || ''
   } catch {
     notifyError(t('admin.banners.errors.uploadFailed'))
   } finally {
@@ -320,7 +338,7 @@ watch(
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="w-full md:w-72">
-          <Input v-model="filters.search" :placeholder="t('admin.banners.searchPlaceholder')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.search" :placeholder="t('admin.banners.searchPlaceholder')" @update:modelValue="debouncedSearch" />
         </div>
         <Select v-model="filters.position" @update:modelValue="handleSearch">
           <SelectTrigger class="h-9 w-[220px]">
@@ -357,7 +375,9 @@ watch(
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="8" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="8" class="p-0">
+              <TableSkeleton :columns="8" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="banners.length === 0">
             <TableCell colspan="8" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.banners.empty') }}</TableCell>
@@ -433,7 +453,8 @@ watch(
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.banners.form.name') }}</label>
-              <Input v-model="form.name" required :placeholder="t('admin.banners.form.namePlaceholder')" />
+              <Input v-model="form.name" :placeholder="t('admin.banners.form.namePlaceholder')" />
+              <p v-if="errors.name" class="text-xs text-destructive mt-1">{{ errors.name }}</p>
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.banners.form.position') }}</label>
@@ -445,6 +466,7 @@ watch(
                   <SelectItem v-for="item in positionOptions" :key="item.value" :value="item.value">{{ item.label }}</SelectItem>
                 </SelectContent>
               </Select>
+              <p v-if="errors.position" class="text-xs text-destructive mt-1">{{ errors.position }}</p>
             </div>
 
             <div class="md:col-span-2">
@@ -470,6 +492,7 @@ watch(
                 </div>
                 <div v-else class="text-sm text-muted-foreground">{{ t('admin.banners.form.imageUploadHint') }}</div>
               </div>
+              <p v-if="errors.image" class="text-xs text-destructive mt-1">{{ errors.image }}</p>
             </div>
 
             <div class="md:col-span-2">
@@ -521,7 +544,7 @@ watch(
 
           <div class="flex justify-end gap-3 border-t border-border pt-6">
             <Button type="button" variant="outline" @click="closeModal">{{ t('admin.common.cancel') }}</Button>
-            <Button type="submit">{{ isEditing ? t('admin.banners.actions.saveChanges') : t('admin.banners.actions.createNow') }}</Button>
+            <Button type="submit" :disabled="submitting">{{ isEditing ? t('admin.banners.actions.saveChanges') : t('admin.banners.actions.createNow') }}</Button>
           </div>
         </form>
       </DialogScrollContent>

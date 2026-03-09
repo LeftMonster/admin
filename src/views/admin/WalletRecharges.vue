@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
-import { adminAPI } from '@/api/admin'
+import { adminAPI, type AdminWalletRecharge } from '@/api/admin'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { paymentStatusClass, paymentStatusLabel } from '@/utils/status'
 import { formatDate, toRFC3339 } from '@/utils/format'
 
 const { t } = useI18n()
 const loading = ref(true)
-const recharges = ref<any[]>([])
+const recharges = ref<AdminWalletRecharge[]>([])
 const pagination = ref({
   page: 1,
   page_size: 20,
@@ -56,7 +58,7 @@ const fetchRecharges = async (page = 1) => {
       paid_from: toRFC3339(filters.paidFrom),
       paid_to: toRFC3339(filters.paidTo),
     })
-    recharges.value = (response.data.data as any[]) || []
+    recharges.value = response.data.data || []
     pagination.value = response.data.pagination || pagination.value
   } catch (error) {
     recharges.value = []
@@ -68,6 +70,7 @@ const fetchRecharges = async (page = 1) => {
 const handleSearch = () => {
   fetchRecharges(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const refresh = () => {
   fetchRecharges(pagination.value.page)
@@ -137,19 +140,19 @@ onMounted(() => {
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="w-full md:w-44">
-          <Input v-model="filters.rechargeNo" :placeholder="t('admin.walletRecharges.filterRechargeNo')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.rechargeNo" :placeholder="t('admin.walletRecharges.filterRechargeNo')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-32">
-          <Input v-model="filters.userId" :placeholder="t('admin.walletRecharges.filterUserId')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.userId" :placeholder="t('admin.walletRecharges.filterUserId')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-48">
-          <Input v-model="filters.userKeyword" :placeholder="t('admin.walletRecharges.filterUserKeyword')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.userKeyword" :placeholder="t('admin.walletRecharges.filterUserKeyword')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-40">
-          <Input v-model="filters.paymentId" :placeholder="t('admin.walletRecharges.filterPaymentId')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.paymentId" :placeholder="t('admin.walletRecharges.filterPaymentId')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-40">
-          <Input v-model="filters.channelId" :placeholder="t('admin.walletRecharges.filterChannelId')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.channelId" :placeholder="t('admin.walletRecharges.filterChannelId')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-40">
           <Select v-model="filters.providerType" @update:modelValue="handleSearch">
@@ -238,7 +241,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="9" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="9" class="p-0">
+              <TableSkeleton :columns="9" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="recharges.length === 0">
             <TableCell colspan="9" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.walletRecharges.empty') }}</TableCell>

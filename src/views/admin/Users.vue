@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminUser } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { userStatusClass, userStatusLabel } from '@/utils/status'
 import { formatDate, formatMoney } from '@/utils/format'
@@ -9,12 +11,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { confirmAction } from '@/utils/confirm'
+import { useFormValidation, rules } from '@/composables/useFormValidation'
 
 const { t } = useI18n()
 const loading = ref(true)
-const users = ref<any[]>([])
+const users = ref<AdminUser[]>([])
 const selectedIds = ref<number[]>([])
 const adminPath = import.meta.env.VITE_ADMIN_PATH || ''
 const pagination = ref({
@@ -35,6 +39,7 @@ const filters = reactive({
 const normalizeFilterValue = (value: string) => (value === '__all__' ? '' : value)
 
 const showModal = ref(false)
+const submitting = ref(false)
 const error = ref('')
 const editingId = ref<number | null>(null)
 const siteCurrency = ref('CNY')
@@ -44,6 +49,11 @@ const form = reactive({
   password: '',
   locale: 'zh-CN',
   status: 'active',
+})
+
+const { errors: formErrors, validate, clearErrors } = useFormValidation({
+  email: [rules.required('This field is required'), rules.email('Invalid email')],
+  nickname: [rules.required('This field is required')],
 })
 
 const fetchUsers = async (page = 1) => {
@@ -59,7 +69,7 @@ const fetchUsers = async (page = 1) => {
       last_login_from: filters.lastLoginFrom || undefined,
       last_login_to: filters.lastLoginTo || undefined,
     })
-    users.value = (response.data.data as any[]) || []
+    users.value = response.data.data || []
     pagination.value = response.data.pagination || pagination.value
     selectedIds.value = []
   } catch {
@@ -72,7 +82,7 @@ const fetchUsers = async (page = 1) => {
 const fetchSiteCurrency = async () => {
   try {
     const response = await adminAPI.getSettings({ key: 'site_config' })
-    const data = response.data?.data as any
+    const data = response.data?.data as Record<string, unknown>
     const raw = String(data?.currency || 'CNY').trim().toUpperCase()
     siteCurrency.value = /^[A-Z]{3}$/.test(raw) ? raw : 'CNY'
   } catch {
@@ -83,6 +93,7 @@ const fetchSiteCurrency = async () => {
 const handleSearch = () => {
   fetchUsers(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const refresh = () => {
   fetchUsers(pagination.value.page)
@@ -142,7 +153,7 @@ const jumpToPage = () => {
   changePage(target)
 }
 
-const openEditModal = (user: any) => {
+const openEditModal = (user: AdminUser) => {
   editingId.value = user.id
   form.email = user.email || ''
   form.nickname = user.display_name || ''
@@ -150,6 +161,7 @@ const openEditModal = (user: any) => {
   form.locale = user.locale || 'zh-CN'
   form.status = user.status || 'active'
   error.value = ''
+  clearErrors()
   showModal.value = true
 }
 
@@ -157,10 +169,13 @@ const closeModal = () => {
   showModal.value = false
   editingId.value = null
   error.value = ''
+  clearErrors()
 }
 
 const handleSubmit = async () => {
   if (!editingId.value) return
+  if (!validate({ email: form.email, nickname: form.nickname } as Record<string, unknown>)) return
+  submitting.value = true
   try {
     await adminAPI.updateUser(editingId.value, {
       email: form.email,
@@ -173,6 +188,8 @@ const handleSubmit = async () => {
     fetchUsers(pagination.value.page)
   } catch (err: any) {
     error.value = err?.message || t('admin.users.errors.updateFailed')
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -204,7 +221,7 @@ onMounted(() => {
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="w-full md:w-64">
-          <Input v-model="filters.keyword" :placeholder="t('admin.users.filterKeyword')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.keyword" :placeholder="t('admin.users.filterKeyword')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-40">
           <Select v-model="filters.status" @update:modelValue="handleSearch">
@@ -280,7 +297,9 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="10" class="p-0">
+              <TableSkeleton :columns="10" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="users.length === 0">
             <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.users.empty') }}</TableCell>
@@ -386,10 +405,12 @@ onMounted(() => {
             <div>
               <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.users.form.email') }}</label>
               <Input v-model="form.email" :placeholder="t('admin.users.form.emailPlaceholder')" />
+              <p v-if="formErrors.email" class="text-xs text-destructive mt-1">{{ formErrors.email }}</p>
             </div>
             <div>
               <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.users.form.nickname') }}</label>
               <Input v-model="form.nickname" :placeholder="t('admin.users.form.nicknamePlaceholder')" />
+              <p v-if="formErrors.nickname" class="text-xs text-destructive mt-1">{{ formErrors.nickname }}</p>
             </div>
             <div>
               <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.users.form.password') }}</label>
@@ -429,7 +450,7 @@ onMounted(() => {
 
           <div class="flex justify-end gap-3">
             <Button type="button" variant="outline" @click="closeModal">{{ t('admin.common.cancel') }}</Button>
-            <Button type="submit">{{ t('admin.common.save') }}</Button>
+            <Button type="submit" :disabled="submitting">{{ t('admin.common.save') }}</Button>
           </div>
         </form>
       </DialogScrollContent>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useDebounceFn } from '@vueuse/core'
 import { adminAPI } from '@/api/admin'
+import type { AdminProcurementOrder, AdminSiteConnection } from '@/api/types'
 import { getLocalizedText, formatMoney } from '@/utils/format'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,10 +13,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { confirmAction } from '@/utils/confirm'
 import { notifyError, notifySuccess } from '@/utils/notify'
 
+interface LocalOrderItem {
+  title: Record<string, string>
+  sku_snapshot?: { sku_code?: string }
+  quantity: number
+  total_amount: number | string
+}
+
+interface LocalOrder {
+  status: string
+  user_email?: string
+  items?: LocalOrderItem[]
+}
+
+type ProcurementOrderWithRelations = AdminProcurementOrder & {
+  connection?: { name?: string; id?: number }
+  local_order?: LocalOrder
+  currency?: string
+}
+
 const { t } = useI18n()
 const loading = ref(true)
-const orders = ref<any[]>([])
-const connections = ref<any[]>([])
+const orders = ref<ProcurementOrderWithRelations[]>([])
+const connections = ref<AdminSiteConnection[]>([])
 const pagination = reactive({
   page: 1,
   page_size: 20,
@@ -32,7 +54,7 @@ const filters = reactive({
 })
 
 const showDetail = ref(false)
-const detailOrder = ref<any>(null)
+const detailOrder = ref<ProcurementOrderWithRelations | null>(null)
 const detailLoading = ref(false)
 const retryingId = ref<number | null>(null)
 const cancelingId = ref<number | null>(null)
@@ -52,23 +74,23 @@ const stats = computed(() => {
   const all = orders.value
   return {
     total: pagination.total,
-    pending: all.filter((o: any) => o.status === 'pending').length,
-    failed: all.filter((o: any) => o.status === 'failed' || o.status === 'rejected').length,
-    fulfilled: all.filter((o: any) => o.status === 'fulfilled').length,
+    pending: all.filter((o) => o.status === 'pending').length,
+    failed: all.filter((o) => o.status === 'failed' || o.status === 'rejected').length,
+    fulfilled: all.filter((o) => o.status === 'fulfilled').length,
   }
 })
 
 const fetchConnections = async () => {
   try {
     const res = await adminAPI.getSiteConnections({ page: 1, page_size: 100 })
-    connections.value = (res.data.data as any[]) || []
+    connections.value = res.data.data || []
   } catch { /* ignore */ }
 }
 
 const fetchOrders = async (page = 1) => {
   loading.value = true
   try {
-    const params: any = {
+    const params: Record<string, unknown> = {
       page,
       page_size: pagination.page_size,
     }
@@ -80,8 +102,8 @@ const fetchOrders = async (page = 1) => {
     if (filters.created_to) params.created_to = filters.created_to
 
     const res = await adminAPI.getProcurementOrders(params)
-    orders.value = (res.data.data as any[]) || []
-    const p = (res.data as any).pagination
+    orders.value = (res.data.data as ProcurementOrderWithRelations[]) || []
+    const p = res.data.pagination
     if (p) {
       pagination.page = p.page
       pagination.page_size = p.page_size
@@ -112,14 +134,15 @@ const jumpToPage = () => {
 const handleSearch = () => {
   fetchOrders(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
-const openDetail = async (order: any) => {
+const openDetail = async (order: ProcurementOrderWithRelations) => {
   detailLoading.value = true
   showDetail.value = true
   detailOrder.value = order
   try {
     const res = await adminAPI.getProcurementOrder(order.id)
-    detailOrder.value = res.data.data || order
+    detailOrder.value = (res.data.data as ProcurementOrderWithRelations) || order
   } catch { /* keep original */ }
   detailLoading.value = false
 }
@@ -129,7 +152,7 @@ const closeDetail = () => {
   detailOrder.value = null
 }
 
-const handleRetry = async (order: any) => {
+const handleRetry = async (order: ProcurementOrderWithRelations) => {
   const confirmed = await confirmAction({
     description: t('procurement.actions.retryConfirm', { id: order.id }),
     confirmText: t('procurement.actions.retry'),
@@ -150,7 +173,7 @@ const handleRetry = async (order: any) => {
   }
 }
 
-const handleCancel = async (order: any) => {
+const handleCancel = async (order: ProcurementOrderWithRelations) => {
   const confirmed = await confirmAction({
     description: t('procurement.actions.cancelConfirm', { id: order.id }),
     confirmText: t('procurement.actions.cancel'),
@@ -218,7 +241,7 @@ const relativeTime = (raw?: string) => {
   return t('procurement.time.daysAgo', { n: days })
 }
 
-const getOrderTitle = (order: any) => {
+const getOrderTitle = (order: ProcurementOrderWithRelations) => {
   const localOrder = order.local_order
   if (!localOrder) return order.local_order_no || '-'
   const items = localOrder.items || []
@@ -228,14 +251,14 @@ const getOrderTitle = (order: any) => {
   return order.local_order_no || '-'
 }
 
-const profitAmount = (order: any) => {
+const profitAmount = (order: ProcurementOrderWithRelations) => {
   const sell = parseFloat(order.local_sell_amount || '0')
   const cost = parseFloat(order.upstream_amount || '0')
   if (!cost || !sell) return null
   return (sell - cost).toFixed(2)
 }
 
-const profitClass = (order: any) => {
+const profitClass = (order: ProcurementOrderWithRelations) => {
   const p = profitAmount(order)
   if (p === null) return ''
   return parseFloat(p) >= 0 ? 'text-emerald-600' : 'text-red-600'
@@ -314,11 +337,11 @@ onMounted(() => {
       </div>
       <div>
         <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('procurement.filters.orderNo') }}</label>
-        <Input v-model="filters.order_no" class="h-9 w-44" :placeholder="t('procurement.filters.orderNoPlaceholder')" @keyup.enter="handleSearch" />
+        <Input v-model="filters.order_no" class="h-9 w-44" :placeholder="t('procurement.filters.orderNoPlaceholder')" @update:modelValue="debouncedSearch" @keyup.enter="handleSearch" />
       </div>
       <div>
         <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('procurement.filters.upstreamOrderNo') }}</label>
-        <Input v-model="filters.upstream_order_no" class="h-9 w-44" :placeholder="t('procurement.filters.upstreamOrderNoPlaceholder')" @keyup.enter="handleSearch" />
+        <Input v-model="filters.upstream_order_no" class="h-9 w-44" :placeholder="t('procurement.filters.upstreamOrderNoPlaceholder')" @update:modelValue="debouncedSearch" @keyup.enter="handleSearch" />
       </div>
       <div>
         <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('procurement.filters.dateRange') }}</label>
@@ -333,8 +356,8 @@ onMounted(() => {
 
     <!-- Order Cards -->
     <div class="space-y-3">
-      <div v-if="loading" class="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">
-        {{ t('admin.common.loading') }}
+      <div v-if="loading" class="rounded-xl border border-border bg-card overflow-hidden">
+        <TableSkeleton :columns="6" :rows="5" />
       </div>
       <div v-else-if="orders.length === 0" class="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">
         {{ t('procurement.empty') }}

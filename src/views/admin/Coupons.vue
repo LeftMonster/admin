@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { adminAPI } from '@/api/admin'
+import type { AdminCoupon, AdminProduct } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDate, getLocalizedText } from '@/utils/format'
 import { notifyError } from '@/utils/notify'
 import { confirmAction } from '@/utils/confirm'
+import { useFormValidation, rules } from '@/composables/useFormValidation'
 
 const loading = ref(true)
-const coupons = ref<any[]>([])
+const coupons = ref<AdminCoupon[]>([])
 const pagination = ref({
   page: 1,
   page_size: 20,
@@ -33,12 +37,13 @@ const normalizeFilterValue = (value: string) => (value === '__all__' ? '' : valu
 const normalizeScopeFilterValue = (value: string) => (value === '__all__' ? '' : value)
 
 const showModal = ref(false)
+const submitting = ref(false)
 const error = ref('')
 const isEditing = ref(false)
 const editingId = ref<number | null>(null)
 const scopeFilterKeyword = ref('')
 const productKeyword = ref('')
-const productOptions = ref<any[]>([])
+const productOptions = ref<AdminProduct[]>([])
 const productOptionsLoading = ref(false)
 const selectedScopeIDs = ref<number[]>([])
 const form = reactive({
@@ -55,6 +60,13 @@ const form = reactive({
 })
 const { t } = useI18n()
 const route = useRoute()
+
+const couponSchema = {
+  code: [rules.required()],
+  type: [rules.required()],
+  value: [rules.required(), rules.numeric(), rules.min(0)],
+}
+const { errors, validate, clearErrors } = useFormValidation(couponSchema)
 
 const applyRouteFilter = () => {
   const rawCode = route.query.code
@@ -121,7 +133,7 @@ const toLocalInput = (raw?: string) => {
   return local.toISOString().slice(0, 16)
 }
 
-const normalizeScopeIDs = (raw: any) => {
+const normalizeScopeIDs = (raw: unknown) => {
   if (Array.isArray(raw)) {
     return Array.from(
       new Set(
@@ -154,7 +166,7 @@ const normalizeScopeIDs = (raw: any) => {
   return []
 }
 
-const buildProductLabel = (product: any) => {
+const buildProductLabel = (product: AdminProduct) => {
   const id = Number(product?.id || 0)
   const name = getLocalizedText(product?.title || {})
   if (id > 0 && name) return `#${id} ${name}`
@@ -162,10 +174,10 @@ const buildProductLabel = (product: any) => {
   return name || '-'
 }
 
-const ensureScopeProductsInOptions = (rows: any[]) => {
+const ensureScopeProductsInOptions = (rows: AdminProduct[]) => {
   if (!selectedScopeIDs.value.length) return rows
   const exists = new Set(
-    rows.map((item: any) => Number(item?.id || 0)).filter((id: number) => Number.isFinite(id) && id > 0)
+    rows.map((item) => Number(item?.id || 0)).filter((id: number) => Number.isFinite(id) && id > 0)
   )
   selectedScopeIDs.value.forEach((id) => {
     if (exists.has(id)) return
@@ -176,7 +188,7 @@ const ensureScopeProductsInOptions = (rows: any[]) => {
         'zh-TW': `#${id}`,
         'en-US': `#${id}`,
       },
-    })
+    } as AdminProduct)
     exists.add(id)
   })
   return rows
@@ -186,7 +198,7 @@ const loadProductOptions = async (keywordInput?: string) => {
   productOptionsLoading.value = true
   try {
     const keyword = String((keywordInput ?? productKeyword.value) || '').trim()
-    const rows: any[] = []
+    const rows: AdminProduct[] = []
     let page = 1
     let totalPage = 1
     do {
@@ -201,8 +213,8 @@ const loadProductOptions = async (keywordInput?: string) => {
       page += 1
     } while (page <= totalPage && page <= 20)
 
-    const dedup = new Map<number, any>()
-    rows.forEach((item: any) => {
+    const dedup = new Map<number, AdminProduct>()
+    rows.forEach((item) => {
       const id = Number(item?.id || 0)
       if (!Number.isFinite(id) || id <= 0) return
       if (!dedup.has(id)) dedup.set(id, item)
@@ -242,7 +254,7 @@ const scopeProductChecked = (rawProductID: number | string) => {
 
 const selectAllScopeProducts = () => {
   const ids = productOptions.value
-    .map((item: any) => Number(item?.id || 0))
+    .map((item) => Number(item?.id || 0))
     .filter((id: number) => Number.isFinite(id) && id > 0)
     .map((id: number) => Math.floor(id))
   selectedScopeIDs.value = Array.from(new Set([...selectedScopeIDs.value, ...ids])).sort((a, b) => a - b)
@@ -255,7 +267,7 @@ const clearScopeProducts = () => {
 const resolveProductNameByID = (rawProductID: number | string) => {
   const productID = Number(rawProductID)
   if (!Number.isFinite(productID) || productID <= 0) return ''
-  const target = productOptions.value.find((item: any) => Number(item?.id || 0) === Math.floor(productID))
+  const target = productOptions.value.find((item) => Number(item?.id || 0) === Math.floor(productID))
   if (!target) return ''
   return getLocalizedText(target?.title || {})
 }
@@ -274,7 +286,7 @@ const fetchCoupons = async (page = 1) => {
       scope_ref_id: normalizedScopeRefID || undefined,
       is_active: isActiveValue,
     })
-    coupons.value = (response.data.data as any[]) || []
+    coupons.value = response.data.data || []
     pagination.value = response.data.pagination || pagination.value
     if (autoOpenId.value) {
       const target = coupons.value.find((item) => item.id === autoOpenId.value)
@@ -293,6 +305,7 @@ const fetchCoupons = async (page = 1) => {
 const handleSearch = () => {
   fetchCoupons(1)
 }
+const debouncedSearch = useDebounceFn(handleSearch, 300)
 
 const handleScopeFilterChange = () => {
   fetchCoupons(1)
@@ -318,12 +331,13 @@ const jumpToPage = () => {
 
 const openCreateModal = () => {
   error.value = ''
+  clearErrors()
   resetForm()
   showModal.value = true
   void loadProductOptions()
 }
 
-const openEditModal = (coupon: any) => {
+const openEditModal = (coupon: AdminCoupon) => {
   error.value = ''
   isEditing.value = true
   editingId.value = coupon.id
@@ -346,15 +360,18 @@ const closeModal = () => {
   showModal.value = false
   isEditing.value = false
   editingId.value = null
+  clearErrors()
 }
 
 const handleSubmit = async () => {
   error.value = ''
+  if (!validate({ ...form } as Record<string, unknown>)) return
   const scopeIDs = normalizeScopeIDs(selectedScopeIDs.value)
   if (!scopeIDs.length) {
     error.value = t('admin.coupons.errors.scopeRequired')
     return
   }
+  submitting.value = true
   try {
     const payload = {
       code: form.code.trim(),
@@ -380,10 +397,12 @@ const handleSubmit = async () => {
     error.value =
       err.message ||
       (isEditing.value ? t('admin.coupons.errors.updateFailed') : t('admin.coupons.errors.createFailed'))
+  } finally {
+    submitting.value = false
   }
 }
 
-const handleDelete = async (coupon: any) => {
+const handleDelete = async (coupon: AdminCoupon) => {
   const confirmed = await confirmAction({ description: t('admin.coupons.confirmDelete', { code: coupon.code }), confirmText: t('admin.common.delete'), variant: 'destructive' })
   if (!confirmed) return
   try {
@@ -395,7 +414,7 @@ const handleDelete = async (coupon: any) => {
   }
 }
 
-const formatScope = (scope?: any) => {
+const formatScope = (scope?: unknown) => {
   const ids = normalizeScopeIDs(scope)
   if (!ids.length) return '-'
   return ids
@@ -461,7 +480,7 @@ watch(
     <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div class="flex flex-wrap items-center gap-3">
         <div class="w-full md:w-48">
-          <Input v-model="filters.code" :placeholder="t('admin.coupons.filterCode')" @update:modelValue="handleSearch" />
+          <Input v-model="filters.code" :placeholder="t('admin.coupons.filterCode')" @update:modelValue="debouncedSearch" />
         </div>
         <div class="w-full md:w-72 flex items-center gap-2">
           <Input
@@ -529,7 +548,9 @@ watch(
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="9" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="9" class="p-0">
+              <TableSkeleton :columns="9" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="coupons.length === 0">
             <TableCell colspan="9" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.coupons.empty') }}</TableCell>
@@ -621,6 +642,7 @@ watch(
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.coupons.modal.code') }} *</label>
               <Input v-model="form.code" required placeholder="PROMO2026" />
+              <p v-if="errors.code" class="text-xs text-destructive mt-1">{{ errors.code }}</p>
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.coupons.modal.type') }} *</label>
@@ -633,10 +655,12 @@ watch(
                   <SelectItem value="fixed">{{ t('admin.common.discountTypes.fixed') }}</SelectItem>
                 </SelectContent>
               </Select>
+              <p v-if="errors.type" class="text-xs text-destructive mt-1">{{ errors.type }}</p>
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.coupons.modal.value') }} *</label>
               <Input v-model.number="form.value" type="number" step="0.01" required placeholder="20" />
+              <p v-if="errors.value" class="text-xs text-destructive mt-1">{{ errors.value }}</p>
             </div>
             <div class="md:col-span-2">
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.coupons.modal.scope') }} *</label>
@@ -725,7 +749,7 @@ watch(
 
           <div class="flex justify-end gap-3">
             <Button type="button" variant="outline" @click="closeModal">{{ t('admin.common.cancel') }}</Button>
-            <Button type="submit">{{ t('admin.common.save') }}</Button>
+            <Button type="submit" :disabled="submitting">{{ t('admin.common.save') }}</Button>
           </div>
         </form>
       </DialogScrollContent>

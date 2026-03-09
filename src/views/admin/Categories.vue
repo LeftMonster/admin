@@ -3,24 +3,28 @@ import { computed, ref, reactive, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
+import type { AdminCategory, LocalizedText } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogScrollContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { getLocalizedText } from '@/utils/format'
 import { getImageUrl } from '@/utils/image'
 import { notifyError } from '@/utils/notify'
 import { confirmAction } from '@/utils/confirm'
+import { useFormValidation, rules } from '@/composables/useFormValidation'
 
 const { t } = useI18n()
 const loading = ref(false)
 const showModal = ref(false)
 const isEditing = ref(false)
-const categories = ref<any[]>([])
+const categories = ref<AdminCategory[]>([])
 const currentLang = ref('zh-CN')
 const route = useRoute()
 const uploading = ref(false)
+const submitting = ref(false)
 const iconFileInput = ref<HTMLInputElement | null>(null)
 
 const languages = computed(() => [
@@ -31,10 +35,15 @@ const languages = computed(() => [
 
 const form = reactive({
   id: 0,
-  name: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as any,
+  name: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
   slug: '',
   icon: '',
   sort_order: 0,
+})
+
+const { errors, validate, clearErrors } = useFormValidation({
+  slug: [rules.required('This field is required')],
+  name: [rules.required('This field is required')],
 })
 
 const getCurrentLangName = () => {
@@ -45,7 +54,7 @@ const fetchCategories = async () => {
   loading.value = true
   try {
     const res = await adminAPI.getCategories()
-    categories.value = (res.data.data as any[]) || []
+    categories.value = res.data.data || []
   } catch (err) {
     categories.value = []
   } finally {
@@ -56,6 +65,7 @@ const fetchCategories = async () => {
 const openCreateModal = () => {
   isEditing.value = false
   currentLang.value = 'zh-CN'
+  clearErrors()
   Object.assign(form, {
     id: 0,
     name: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' },
@@ -66,7 +76,7 @@ const openCreateModal = () => {
   showModal.value = true
 }
 
-const openEditModal = (category: any) => {
+const openEditModal = (category: AdminCategory) => {
   isEditing.value = true
   currentLang.value = 'zh-CN'
 
@@ -85,9 +95,12 @@ const openEditModal = (category: any) => {
 
 const closeModal = () => {
   showModal.value = false
+  clearErrors()
 }
 
 const handleSubmit = async () => {
+  if (!validate({ slug: form.slug, name: form.name['zh-CN'] } as Record<string, unknown>)) return
+  submitting.value = true
   try {
     const payload = { ...form }
     if (isEditing.value) {
@@ -99,10 +112,12 @@ const handleSubmit = async () => {
     fetchCategories()
   } catch (err: any) {
     notifyError(t('admin.categories.errors.operationFailed', { message: err?.message || '' }))
+  } finally {
+    submitting.value = false
   }
 }
 
-const handleDelete = async (category: any) => {
+const handleDelete = async (category: AdminCategory) => {
   const confirmed = await confirmAction({ description: t('admin.categories.confirmDelete', { name: getLocalizedText(category.name) }), confirmText: t('admin.common.delete'), variant: 'destructive' })
   if (!confirmed) return
   try {
@@ -131,7 +146,7 @@ const uploadIcon = async (file: File) => {
   formData.append('file', file)
   try {
     const res = await adminAPI.upload(formData, 'category')
-    form.icon = (res.data.data as any)?.url || ''
+    form.icon = (res.data.data as Record<string, string>)?.url || ''
   } catch (err: any) {
     notifyError(t('admin.categories.errors.operationFailed', { message: err?.message || '' }))
   } finally {
@@ -193,7 +208,9 @@ watch(
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell colspan="6" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.common.loading') }}</TableCell>
+            <TableCell :colspan="6" class="p-0">
+              <TableSkeleton :columns="6" :rows="5" />
+            </TableCell>
           </TableRow>
           <TableRow v-else-if="categories.length === 0">
             <TableCell colspan="6" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.categories.empty') }}</TableCell>
@@ -244,12 +261,13 @@ watch(
           <div>
             <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.categories.form.name', { lang: getCurrentLangName() }) }}</label>
             <Input v-model="form.name[currentLang]" :placeholder="t('admin.categories.form.namePlaceholder')" />
-            <p v-if="currentLang === 'zh-CN' && !form.name['zh-CN']" class="text-xs text-destructive mt-1">{{ t('admin.categories.form.nameRequired') }}</p>
+            <p v-if="errors.name" class="text-xs text-destructive mt-1">{{ errors.name }}</p>
           </div>
 
           <div>
             <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.categories.form.slug') }}</label>
-            <Input v-model="form.slug" required :placeholder="t('admin.categories.form.slugPlaceholder')" />
+            <Input v-model="form.slug" :placeholder="t('admin.categories.form.slugPlaceholder')" />
+            <p v-if="errors.slug" class="text-xs text-destructive mt-1">{{ errors.slug }}</p>
           </div>
 
           <div>
@@ -283,7 +301,7 @@ watch(
 
           <div class="flex justify-end gap-3 border-t border-border pt-6">
             <Button type="button" variant="outline" @click="closeModal">{{ t('admin.common.cancel') }}</Button>
-            <Button type="submit">{{ isEditing ? t('admin.categories.actions.saveChanges') : t('admin.categories.actions.createNow') }}</Button>
+            <Button type="submit" :disabled="submitting">{{ isEditing ? t('admin.categories.actions.saveChanges') : t('admin.categories.actions.createNow') }}</Button>
           </div>
         </form>
       </DialogScrollContent>

@@ -88,7 +88,7 @@ const editor = useEditor({
       },
     }),
     Placeholder.configure({
-      placeholder: props.placeholder || '在此输入内容...',
+      placeholder: props.placeholder || t('admin.richEditor.placeholder'),
     }),
     TextAlign.configure({
       types: ['heading', 'paragraph', 'image'],
@@ -150,7 +150,7 @@ const handleSourceInput = (event: Event) => {
 }
 
 const addLink = () => {
-  const url = window.prompt('输入链接URL:')
+  const url = window.prompt(t('admin.richEditor.enterLinkUrl'))
   if (url && editor.value) {
     editor.value.chain().focus().setLink({ href: url }).run()
   }
@@ -192,7 +192,7 @@ const handleImageUpload = async (event: Event) => {
   if (!file) return
 
   if (!file.type.startsWith('image/')) {
-    notifyError('请选择图片文件')
+    notifyError(t('admin.richEditor.selectImageFile'))
     return
   }
 
@@ -210,7 +210,7 @@ const handleImageUpload = async (event: Event) => {
       const imageFullUrl = getImageUrl(imageRelativePath)
       editor.value.chain().focus().setImage({ src: imageFullUrl }).run()
     } else {
-      throw new Error('未获取到图片URL')
+      throw new Error(t('admin.richEditor.imageUrlMissing'))
     }
   } catch (error) {
     notifyError((error as Error)?.message || t('admin.common.uploadFailed'))
@@ -228,52 +228,52 @@ onBeforeUnmount(() => {
 <template>
   <div class="rich-editor">
     <div v-if="editor" class="editor-toolbar" :class="{ 'is-source-mode': isSourceMode }">
-      <button type="button" class="toolbar-btn" title="粗体" :class="{ 'is-active': editor.isActive('bold') }" @click="editor.chain().focus().toggleBold().run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.bold')" :class="{ 'is-active': editor.isActive('bold') }" @click="editor.chain().focus().toggleBold().run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M11 5H7a1 1 0 000 2h4a1 1 0 100-2zM7 11h6a1 1 0 100-2H7a1 1 0 100 2zM13 15H7a1 1 0 100 2h6a1 1 0 100-2z" />
         </svg>
       </button>
 
-      <button type="button" class="toolbar-btn" title="斜体" :class="{ 'is-active': editor.isActive('italic') }" @click="editor.chain().focus().toggleItalic().run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.italic')" :class="{ 'is-active': editor.isActive('italic') }" @click="editor.chain().focus().toggleItalic().run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M10 3a1 1 0 011 1v5h3a1 1 0 110 2h-3v5a1 1 0 11-2 0v-5H6a1 1 0 110-2h3V4a1 1 0 011-1z" />
         </svg>
       </button>
 
-      <button type="button" class="toolbar-btn" title="删除线" :class="{ 'is-active': editor.isActive('strike') }" @click="editor.chain().focus().toggleStrike().run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.strikethrough')" :class="{ 'is-active': editor.isActive('strike') }" @click="editor.chain().focus().toggleStrike().run()">
         <span class="font-bold line-through">S</span>
       </button>
 
       <div class="toolbar-divider"></div>
 
-      <button type="button" class="toolbar-btn" title="标题1" :class="{ 'is-active': editor.isActive('heading', { level: 1 }) }" @click="editor.chain().focus().toggleHeading({ level: 1 }).run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.heading1')" :class="{ 'is-active': editor.isActive('heading', { level: 1 }) }" @click="editor.chain().focus().toggleHeading({ level: 1 }).run()">
         H1
       </button>
-      <button type="button" class="toolbar-btn" title="标题2" :class="{ 'is-active': editor.isActive('heading', { level: 2 }) }" @click="editor.chain().focus().toggleHeading({ level: 2 }).run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.heading2')" :class="{ 'is-active': editor.isActive('heading', { level: 2 }) }" @click="editor.chain().focus().toggleHeading({ level: 2 }).run()">
         H2
       </button>
-      <button type="button" class="toolbar-btn" title="标题3" :class="{ 'is-active': editor.isActive('heading', { level: 3 }) }" @click="editor.chain().focus().toggleHeading({ level: 3 }).run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.heading3')" :class="{ 'is-active': editor.isActive('heading', { level: 3 }) }" @click="editor.chain().focus().toggleHeading({ level: 3 }).run()">
         H3
       </button>
-      <button type="button" class="toolbar-btn" title="标题4" :class="{ 'is-active': editor.isActive('heading', { level: 4 }) }" @click="editor.chain().focus().toggleHeading({ level: 4 }).run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.heading4')" :class="{ 'is-active': editor.isActive('heading', { level: 4 }) }" @click="editor.chain().focus().toggleHeading({ level: 4 }).run()">
         H4
       </button>
 
       <div class="toolbar-divider"></div>
 
-      <button type="button" class="toolbar-btn" title="无序列表" :class="{ 'is-active': editor.isActive('bulletList') }" @click="editor.chain().focus().toggleBulletList().run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.bulletList')" :class="{ 'is-active': editor.isActive('bulletList') }" @click="editor.chain().focus().toggleBulletList().run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
         </svg>
       </button>
 
-      <button type="button" class="toolbar-btn" title="有序列表" :class="{ 'is-active': editor.isActive('orderedList') }" @click="editor.chain().focus().toggleOrderedList().run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.orderedList')" :class="{ 'is-active': editor.isActive('orderedList') }" @click="editor.chain().focus().toggleOrderedList().run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 8a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
         </svg>
       </button>
 
-      <button type="button" class="toolbar-btn" title="引用" :class="{ 'is-active': editor.isActive('blockquote') }" @click="editor.chain().focus().toggleBlockquote().run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.blockquote')" :class="{ 'is-active': editor.isActive('blockquote') }" @click="editor.chain().focus().toggleBlockquote().run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
         </svg>
@@ -281,13 +281,13 @@ onBeforeUnmount(() => {
 
       <div class="toolbar-divider"></div>
 
-      <button type="button" class="toolbar-btn" title="插入链接" :class="{ 'is-active': editor.isActive('link') }" @click="addLink">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.insertLink')" :class="{ 'is-active': editor.isActive('link') }" @click="addLink">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" />
         </svg>
       </button>
 
-      <button type="button" class="toolbar-btn" title="上传图片" @click="triggerImageUpload">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.uploadImage')" @click="triggerImageUpload">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" clip-rule="evenodd" />
         </svg>
@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
       <input ref="imageFileInput" type="file" class="hidden" accept="image/*" @change="handleImageUpload" />
 
       <div class="relative color-picker-container">
-        <button type="button" class="toolbar-btn" title="文字颜色" @click="showColorPicker = !showColorPicker">
+        <button type="button" class="toolbar-btn" :title="t('admin.richEditor.textColor')" @click="showColorPicker = !showColorPicker">
           <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
           </svg>
@@ -314,19 +314,19 @@ onBeforeUnmount(() => {
 
       <div class="toolbar-divider"></div>
 
-      <button type="button" class="toolbar-btn" title="左对齐" :class="{ 'is-active': editor.isActive({ textAlign: 'left' }) }" @click="editor.chain().focus().setTextAlign('left').run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.alignLeft')" :class="{ 'is-active': editor.isActive({ textAlign: 'left' }) }" @click="editor.chain().focus().setTextAlign('left').run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
         </svg>
       </button>
 
-      <button type="button" class="toolbar-btn" title="居中对齐" :class="{ 'is-active': editor.isActive({ textAlign: 'center' }) }" @click="editor.chain().focus().setTextAlign('center').run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.alignCenter')" :class="{ 'is-active': editor.isActive({ textAlign: 'center' }) }" @click="editor.chain().focus().setTextAlign('center').run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3 4a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H7a1 1 0 01-1-1zm3 4a1 1 0 011-1h6a1 1 0 110 2h-6a1 1 0 01-1-1z" clip-rule="evenodd" />
         </svg>
       </button>
 
-      <button type="button" class="toolbar-btn" title="右对齐" :class="{ 'is-active': editor.isActive({ textAlign: 'right' }) }" @click="editor.chain().focus().setTextAlign('right').run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.alignRight')" :class="{ 'is-active': editor.isActive({ textAlign: 'right' }) }" @click="editor.chain().focus().setTextAlign('right').run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm6 4a1 1 0 011-1h6a1 1 0 110 2h-6a1 1 0 01-1-1zm-6 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm6 4a1 1 0 011-1h6a1 1 0 110 2h-6a1 1 0 01-1-1z" clip-rule="evenodd" />
         </svg>
@@ -334,39 +334,39 @@ onBeforeUnmount(() => {
 
       <div class="toolbar-divider"></div>
 
-      <button type="button" class="toolbar-btn" title="插入表格" @click="editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.insertTable')" @click="editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clip-rule="evenodd" />
         </svg>
       </button>
 
       <template v-if="editor.isActive('table')">
-        <button type="button" class="toolbar-btn" title="添加列" @click="editor.chain().focus().addColumnAfter().run()">
+        <button type="button" class="toolbar-btn" :title="t('admin.richEditor.addColumn')" @click="editor.chain().focus().addColumnAfter().run()">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
         </button>
-        <button type="button" class="toolbar-btn" title="删除列" @click="editor.chain().focus().deleteColumn().run()">
+        <button type="button" class="toolbar-btn" :title="t('admin.richEditor.deleteColumn')" @click="editor.chain().focus().deleteColumn().run()">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
           </svg>
         </button>
-        <button type="button" class="toolbar-btn" title="添加行" @click="editor.chain().focus().addRowAfter().run()">
+        <button type="button" class="toolbar-btn" :title="t('admin.richEditor.addRow')" @click="editor.chain().focus().addRowAfter().run()">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
         </button>
-        <button type="button" class="toolbar-btn" title="删除行" @click="editor.chain().focus().deleteRow().run()">
+        <button type="button" class="toolbar-btn" :title="t('admin.richEditor.deleteRow')" @click="editor.chain().focus().deleteRow().run()">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
           </svg>
         </button>
-        <button type="button" class="toolbar-btn" title="合并单元格" @click="editor.chain().focus().mergeCells().run()">
+        <button type="button" class="toolbar-btn" :title="t('admin.richEditor.mergeCells')" @click="editor.chain().focus().mergeCells().run()">
           <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
             <path d="M4 4h12v12H4z" />
           </svg>
         </button>
-        <button type="button" class="toolbar-btn text-destructive" title="删除表格" @click="editor.chain().focus().deleteTable().run()">
+        <button type="button" class="toolbar-btn text-destructive" :title="t('admin.richEditor.deleteTable')" @click="editor.chain().focus().deleteTable().run()">
           <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
           </svg>
@@ -375,13 +375,13 @@ onBeforeUnmount(() => {
 
       <div class="toolbar-divider"></div>
 
-      <button type="button" class="toolbar-btn" title="撤销" :disabled="!editor.can().undo()" @click="editor.chain().focus().undo().run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.undo')" :disabled="!editor.can().undo()" @click="editor.chain().focus().undo().run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
         </svg>
       </button>
 
-      <button type="button" class="toolbar-btn" title="重做" :disabled="!editor.can().redo()" @click="editor.chain().focus().redo().run()">
+      <button type="button" class="toolbar-btn" :title="t('admin.richEditor.redo')" :disabled="!editor.can().redo()" @click="editor.chain().focus().redo().run()">
         <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M12.293 3.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 9H9a5 5 0 00-5 5v2a1 1 0 11-2 0v-2a7 7 0 017-7h5.586l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
         </svg>
@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
 
       <div class="toolbar-divider"></div>
 
-      <button type="button" class="toolbar-btn code-mode-btn" title="代码模式" :class="{ 'is-active': isSourceMode }" @click="toggleSourceMode">
+      <button type="button" class="toolbar-btn code-mode-btn" :title="t('admin.richEditor.sourceMode')" :class="{ 'is-active': isSourceMode }" @click="toggleSourceMode">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
         </svg>
