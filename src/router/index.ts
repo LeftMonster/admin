@@ -190,6 +190,30 @@ const routes = [
         component: () => import('@/views/admin/ApiCredentials.vue'),
         meta: { permission: 'GET:/admin/api-credentials' },
       },
+      {
+        path: 'telegram-bot',
+        name: 'telegram-bot',
+        component: () => import('@/views/admin/TelegramBot.vue'),
+        meta: { permission: 'GET:/admin/settings/telegram-bot' },
+      },
+      {
+        path: 'telegram-bot/settings',
+        name: 'telegram-bot-settings',
+        component: () => import('@/views/admin/TelegramBotSettings.vue'),
+        meta: { permission: 'GET:/admin/settings/telegram-bot' },
+      },
+      {
+        path: 'telegram-bot/status',
+        name: 'telegram-bot-status',
+        component: () => import('@/views/admin/TelegramBotStatus.vue'),
+        meta: { permission: 'GET:/admin/settings/telegram-bot' },
+      },
+      {
+        path: 'telegram-bot/channel-clients',
+        name: 'telegram-bot-channel-clients',
+        component: () => import('@/views/admin/TelegramBotChannelClients.vue'),
+        meta: { permission: 'GET:/admin/channel-clients' },
+      },
     ],
   },
 ]

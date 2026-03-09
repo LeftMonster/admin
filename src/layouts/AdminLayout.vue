@@ -35,6 +35,8 @@ import {
   Truck,
   ClipboardCheck,
   Lock,
+  Bot,
+  Wifi,
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -287,6 +289,37 @@ const navGroups = computed<NavGroup[]>(() => {
       ],
     },
     {
+      id: 'telegramBot',
+      label: t('admin.navGroups.telegramBot'),
+      icon: Bot,
+      items: [
+        {
+          label: t('admin.navItems.telegramBotOverview'),
+          to: '/telegram-bot',
+          icon: Bot,
+          permission: 'GET:/admin/settings/telegram-bot',
+        },
+        {
+          label: t('admin.navItems.telegramBotSettings'),
+          to: '/telegram-bot/settings',
+          icon: SlidersHorizontal,
+          permission: 'GET:/admin/settings/telegram-bot',
+        },
+        {
+          label: t('admin.navItems.telegramBotStatus'),
+          to: '/telegram-bot/status',
+          icon: Wifi,
+          permission: 'GET:/admin/settings/telegram-bot',
+        },
+        {
+          label: t('admin.navItems.telegramBotChannelClients'),
+          to: '/telegram-bot/channel-clients',
+          icon: KeyRound,
+          permission: 'GET:/admin/channel-clients',
+        },
+      ],
+    },
+    {
       id: 'system',
       label: t('admin.navGroups.systemSettings'),
       icon: Settings,
@@ -398,7 +431,16 @@ const isItemActive = (to: string) => {
   if (to === '/') {
     return route.path === '/'
   }
-  return route.path === to || route.path.startsWith(`${to}/`)
+  // 精确匹配优先：如果当前路由被其他更具体的导航项精确匹配，则前缀匹配项不应高亮
+  if (route.path === to) return true
+  if (!route.path.startsWith(`${to}/`)) return false
+  // 前缀匹配时，检查是否有其他导航项精确匹配当前路由
+  for (const group of navGroups.value) {
+    for (const item of group.items) {
+      if (item.to !== to && route.path === item.to) return false
+    }
+  }
+  return true
 }
 
 const applyTheme = (theme: 'light' | 'dark') => {

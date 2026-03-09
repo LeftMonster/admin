@@ -395,4 +395,18 @@ export const adminAPI = {
   rejectApiCredential: (id: number, data: { reason: string }) => api.post<ApiResponse>(`/admin/api-credentials/${id}/reject`, data),
   updateApiCredentialStatus: (id: number, data: { is_active: boolean }) => api.put<ApiResponse>(`/admin/api-credentials/${id}/status`, data),
   deleteApiCredential: (id: number) => api.delete<ApiResponse>(`/admin/api-credentials/${id}`),
+
+  // Channel Clients (Bot Clients)
+  getChannelClients: () => api.get<ApiResponse>('/admin/channel-clients'),
+  createChannelClient: (data: { name: string; channel_type: string; description?: string; bot_token?: string }) => api.post<ApiResponse>('/admin/channel-clients', data),
+  getChannelClient: (id: number) => api.get<ApiResponse>(`/admin/channel-clients/${id}`),
+  updateChannelClient: (id: number, data: { name?: string; description?: string; bot_token?: string }) => api.put<ApiResponse>(`/admin/channel-clients/${id}`, data),
+  updateChannelClientStatus: (id: number, data: { status: number }) => api.put<ApiResponse>(`/admin/channel-clients/${id}/status`, data),
+  resetChannelClientSecret: (id: number) => api.post<ApiResponse>(`/admin/channel-clients/${id}/reset-secret`),
+  deleteChannelClient: (id: number) => api.delete<ApiResponse>(`/admin/channel-clients/${id}`),
+
+  // Telegram Bot Settings
+  getTelegramBotSettings: () => api.get<ApiResponse>('/admin/settings/telegram-bot'),
+  updateTelegramBotSettings: (data: Record<string, unknown>) => api.put<ApiResponse>('/admin/settings/telegram-bot', data),
+  getTelegramBotRuntimeStatus: () => api.get<ApiResponse>('/admin/settings/telegram-bot/runtime-status'),
 }

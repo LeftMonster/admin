@@ -1,0 +1,148 @@
+<script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { adminAPI } from '@/api/admin'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Bot, ExternalLink, Wifi, WifiOff, RefreshCw } from 'lucide-vue-next'
+
+const { t } = useI18n()
+
+const loading = ref(false)
+const runtimeStatus = ref<Record<string, unknown> | null>(null)
+
+const isConnected = computed(() => {
+  if (!runtimeStatus.value) return false
+  return runtimeStatus.value.connected === true
+})
+
+const fetchRuntimeStatus = async () => {
+  loading.value = true
+  try {
+    const res = await adminAPI.getTelegramBotRuntimeStatus()
+    const data = res.data?.data
+    runtimeStatus.value = data && typeof data === 'object' ? (data as Record<string, unknown>) : null
+  } catch {
+    runtimeStatus.value = null
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchRuntimeStatus()
+})
+</script>
+
+<template>
+  <div class="space-y-6">
+    <div>
+      <h2 class="text-2xl font-bold tracking-tight">{{ t('telegramBot.overview.title') }}</h2>
+      <p class="text-muted-foreground">{{ t('telegramBot.overview.subtitle') }}</p>
+    </div>
+
+    <!-- Connection Status Card -->
+    <Card>
+      <CardHeader>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <Bot class="h-8 w-8 text-primary" />
+            <div>
+              <CardTitle>{{ t('telegramBot.overview.connectionTitle') }}</CardTitle>
+              <CardDescription>{{ t('telegramBot.overview.connectionDesc') }}</CardDescription>
+            </div>
+          </div>
+          <Badge :variant="isConnected ? 'default' : 'secondary'">
+            <component :is="isConnected ? Wifi : WifiOff" class="h-3 w-3 mr-1" />
+            {{ isConnected ? t('telegramBot.overview.connected') : t('telegramBot.overview.notConnected') }}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div v-if="isConnected && runtimeStatus" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <p class="text-sm text-muted-foreground">{{ t('telegramBot.status.botVersion') }}</p>
+            <p class="text-sm font-medium">{{ runtimeStatus.bot_version || '-' }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-muted-foreground">{{ t('telegramBot.status.webhookStatus') }}</p>
+            <p class="text-sm font-medium">{{ runtimeStatus.webhook_status || '-' }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-muted-foreground">{{ t('telegramBot.status.lastSeenAt') }}</p>
+            <p class="text-sm font-medium">{{ runtimeStatus.last_seen_at || '-' }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-muted-foreground">{{ t('telegramBot.status.configVersion') }}</p>
+            <p class="text-sm font-medium">{{ runtimeStatus.config_version ?? '-' }}</p>
+          </div>
+        </div>
+        <div v-else class="rounded-lg border border-dashed p-6 text-center">
+          <WifiOff class="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+          <p class="text-sm text-muted-foreground mb-1">{{ t('telegramBot.overview.notConnectedHint') }}</p>
+          <p class="text-xs text-muted-foreground">{{ t('telegramBot.overview.notConnectedDesc') }}</p>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Feature Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">{{ t('telegramBot.overview.featureBasicSettings') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="text-sm text-muted-foreground">{{ t('telegramBot.overview.featureBasicSettingsDesc') }}</p>
+          <Button variant="link" class="px-0 mt-2" as-child>
+            <RouterLink to="/telegram-bot/settings">
+              {{ t('telegramBot.overview.goToSettings') }}
+              <ExternalLink class="h-3 w-3 ml-1" />
+            </RouterLink>
+          </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">{{ t('telegramBot.overview.featureConnectionStatus') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="text-sm text-muted-foreground">{{ t('telegramBot.overview.featureConnectionStatusDesc') }}</p>
+          <Button variant="link" class="px-0 mt-2" as-child>
+            <RouterLink to="/telegram-bot/status">
+              {{ t('telegramBot.overview.goToStatus') }}
+              <ExternalLink class="h-3 w-3 ml-1" />
+            </RouterLink>
+          </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">{{ t('telegramBot.overview.featureChannelClients') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="text-sm text-muted-foreground">{{ t('telegramBot.overview.featureChannelClientsDesc') }}</p>
+          <Button variant="link" class="px-0 mt-2" as-child>
+            <RouterLink to="/telegram-bot/channel-clients">
+              {{ t('telegramBot.overview.goToChannelClients') }}
+              <ExternalLink class="h-3 w-3 ml-1" />
+            </RouterLink>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+
+    <!-- Quick Actions -->
+    <Card>
+      <CardHeader>
+        <CardTitle>{{ t('telegramBot.overview.quickActions') }}</CardTitle>
+      </CardHeader>
+      <CardContent class="flex gap-3">
+        <Button variant="outline" size="sm" :disabled="loading" @click="fetchRuntimeStatus">
+          <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': loading }" />
+          {{ t('telegramBot.overview.refreshStatus') }}
+        </Button>
+      </CardContent>
+    </Card>
+  </div>
+</template>
