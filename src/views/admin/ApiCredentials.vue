@@ -82,7 +82,7 @@ const statusVariant = (status: string) => {
   }
 }
 
-const formatDate = (d: string) => d ? new Date(d).toLocaleString() : '-'
+const formatDate = (d?: string) => d ? new Date(d).toLocaleString() : '-'
 
 const openDetail = (cred: AdminApiCredential) => {
   detailCred.value = cred

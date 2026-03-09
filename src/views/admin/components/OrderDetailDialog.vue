@@ -40,7 +40,7 @@ const { t, locale } = useI18n()
 const detailLoading = ref(false)
 const detailError = ref('')
 const selectedOrder = ref<AdminOrder | null>(null)
-const procurementOrder = ref<AdminProcurementOrder | null>(null)
+const procurementOrder = ref<AdminProcurementOrder | null | undefined>(null)
 
 const refundSubmitting = ref(false)
 const refundError = ref('')
@@ -154,7 +154,8 @@ const manualSubmissionRows = (submission: Record<string, unknown> | null | undef
 }
 
 const parseOrderItemSkuId = (item: AdminOrderItem & Record<string, unknown>) => {
-  const value = Number(item?.sku_id || item?.sku_snapshot?.sku_id || 0)
+  const snapshot = item?.sku_snapshot as Record<string, unknown> | undefined
+  const value = Number(item?.sku_id || snapshot?.sku_id || 0)
   if (!Number.isFinite(value)) return 0
   const normalized = Math.trunc(value)
   return normalized > 0 ? normalized : 0
@@ -178,7 +179,7 @@ const orderItemSkuSpecText = (item: AdminOrderItem & Record<string, unknown>) =>
 
 const fulfillmentDeliveryLines = (fulfillment: AdminFulfillment & Record<string, unknown>) => {
   const lines: string[] = []
-  const logistics = fulfillment?.delivery_data || fulfillment?.logistics
+  const logistics = (fulfillment?.delivery_data || fulfillment?.logistics) as Record<string, unknown> | undefined
   if (logistics && typeof logistics === 'object') {
     const note = String(logistics.note || '').trim()
     if (note) {

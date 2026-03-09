@@ -93,6 +93,7 @@ export function useFormValidation<T extends Record<string, unknown>>(
     for (const field of Object.keys(schema)) {
       const value = data[field]
       const fieldRules = schema[field]
+      if (!fieldRules) continue
       let fieldValid = true
       for (const rule of fieldRules) {
         const result = rule(value)

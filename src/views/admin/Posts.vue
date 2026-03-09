@@ -422,7 +422,7 @@ watch(
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">
                 {{ t('admin.posts.form.content', { lang: getCurrentLangName() }) }}
               </label>
-              <RichEditor v-model="form.content[currentLang]" :placeholder="t('admin.posts.form.contentPlaceholder')" />
+              <RichEditor :model-value="form.content[currentLang] || ''" @update:model-value="(v: string) => form.content[currentLang] = v" :placeholder="t('admin.posts.form.contentPlaceholder')" />
             </div>
 
             <div class="col-span-2 flex items-center gap-2 border-t border-border pt-4">

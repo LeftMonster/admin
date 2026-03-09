@@ -188,7 +188,7 @@ const ensureScopeProductsInOptions = (rows: AdminProduct[]) => {
         'zh-TW': `#${id}`,
         'en-US': `#${id}`,
       },
-    } as AdminProduct)
+    } as unknown as AdminProduct)
     exists.add(id)
   })
   return rows

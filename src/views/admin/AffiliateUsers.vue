@@ -3,7 +3,6 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { AdminAffiliateUser } from '@/api/types'
 import { AFFILIATE_PROFILE_STATUS_ACTIVE, AFFILIATE_PROFILE_STATUS_DISABLED } from '@/constants/affiliate'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
@@ -18,7 +17,7 @@ import { notifyError, notifySuccess } from '@/utils/notify'
 const { t } = useI18n()
 const loading = ref(true)
 const operatingProfileID = ref<number | null>(null)
-const rows = ref<Record<string, unknown>[]>([])
+const rows = ref<any[]>([])
 const selectedIds = ref<number[]>([])
 const jumpPage = ref('')
 const pagination = ref({
@@ -68,7 +67,7 @@ const fetchRows = async (page = 1) => {
       code: filters.code || undefined,
       status: normalizeFilterValue(filters.status) || undefined,
     })
-    rows.value = (response.data.data as Record<string, unknown>[]) || []
+    rows.value = (response.data.data as any[]) || []
     const currentIDs = new Set(
       rows.value
         .map((item) => resolveProfileID(item))

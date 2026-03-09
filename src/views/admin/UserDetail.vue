@@ -52,7 +52,7 @@ const ordersLoading = ref(false)
 const ordersPagination = ref({ page: 1, page_size: 20, total: 0, total_page: 1 })
 const ordersJumpPage = ref('')
 
-const payments = ref<(AdminPayment & Record<string, unknown>)[]>([])
+const payments = ref<AdminPayment[]>([])
 const paymentsLoading = ref(false)
 const paymentsPagination = ref({ page: 1, page_size: 20, total: 0, total_page: 1 })
 const paymentsJumpPage = ref('')

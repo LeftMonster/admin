@@ -213,7 +213,7 @@ onMounted(() => {
             </TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">{{ item.reject_reason || '-' }}</TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">
-              <div>{{ item?.processor?.username || '-' }}</div>
+              <div>{{ (typeof item?.processor === 'object' ? item?.processor?.username : item?.processor) || '-' }}</div>
               <div class="mt-0.5">{{ formatDate(item.processed_at) || '-' }}</div>
             </TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">{{ formatDate(item.created_at) }}</TableCell>

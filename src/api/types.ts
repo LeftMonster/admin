@@ -85,6 +85,13 @@ export interface AdminOrderItem {
   total_price: number
   fulfillment_type: string
   created_at: string
+  title?: string
+  promotion_id?: number
+  promotion_name?: string
+  tags?: string[]
+  manual_form_submission?: Record<string, unknown>
+  coupon_discount_amount?: number
+  promotion_discount_amount?: number
 }
 
 export interface AdminFulfillment {
@@ -95,6 +102,8 @@ export interface AdminFulfillment {
   content: string
   created_at: string
   updated_at: string
+  payload?: string
+  delivery_data?: Record<string, unknown>
 }
 
 export interface AdminOrder {
@@ -114,6 +123,7 @@ export interface AdminOrder {
   online_paid_amount: number
   refunded_amount: number
   coupon_id?: number
+  coupon_code?: string
   promotion_id?: number
   affiliate_profile_id?: number
   affiliate_code?: string
@@ -126,6 +136,9 @@ export interface AdminOrder {
   items?: AdminOrderItem[]
   fulfillment?: AdminFulfillment
   children?: AdminOrder[]
+  payments?: AdminPayment[]
+  user_display_name?: string
+  user_email?: string
 }
 
 // --- CardSecret ---
@@ -134,6 +147,9 @@ export interface AdminCardSecretBatch {
   product_id: number
   sku_id: number
   name: string
+  batch_no?: string
+  source?: string
+  note?: string
   total_count: number
   available_count: number
   used_count: number
@@ -167,7 +183,7 @@ export interface AdminCoupon {
   used_count: number
   per_user_limit: number
   scope_type: string
-  scope_ref_ids: string
+  scope_ref_ids: number[] | string
   starts_at?: string
   ends_at?: string
   is_active: boolean
@@ -181,7 +197,7 @@ export interface AdminGiftCard {
   batch_id?: number
   name: string
   code: string
-  amount: number
+  amount: number | string
   currency: string
   status: string
   expires_at?: string
@@ -195,6 +211,7 @@ export interface AdminGiftCard {
 export interface AdminGiftCardBatch {
   id: number
   name: string
+  batch_no?: string
   total_count: number
   amount: number
   currency: string
@@ -258,7 +275,7 @@ export interface AdminPaymentChannel {
   provider_type: string
   channel_type: string
   interaction_mode: string
-  fee_rate: number
+  fee_rate: number | string
   config_json: Record<string, unknown>
   is_active: boolean
   sort_order: number
@@ -288,6 +305,13 @@ export interface AdminPayment {
   updated_at: string
   order_no?: string
   channel_name?: string
+  recharge_no?: string
+  recharge_user_id?: number
+  recharge_status?: string
+  provider_ref?: string
+  pay_url?: string
+  qr_code?: string
+  provider_payload?: Record<string, unknown>
 }
 
 // --- User ---
@@ -295,12 +319,15 @@ export interface AdminUser {
   id: number
   email: string
   display_name: string
+  nickname?: string
   locale: string
   status: string
+  wallet_balance?: number | string
   email_verified_at?: string
   last_login_at?: string
   created_at: string
   updated_at: string
+  [key: string]: unknown
 }
 
 // --- UserLoginLog ---
@@ -310,6 +337,7 @@ export interface AdminUserLoginLog {
   email: string
   client_ip: string
   user_agent: string
+  login_source?: string
   status: string
   fail_reason?: string
   created_at: string
@@ -322,6 +350,12 @@ export interface AdminSiteConnection {
   type: string
   base_url: string
   api_key: string
+  api_secret?: string
+  protocol?: string
+  callback_url?: string
+  retry_max?: number
+  retry_intervals?: string
+  status?: string
   is_active: boolean
   last_ping_at?: string
   last_ping_status?: string
@@ -346,6 +380,9 @@ export interface AdminProductMapping {
   updated_at: string
   connection_name?: string
   local_product_title?: string
+  last_synced_at?: string
+  product?: { id: number; title?: LocalizedText; skus?: AdminProductSKU[] }
+  [key: string]: unknown
 }
 
 // --- ProcurementOrder ---
@@ -369,6 +406,8 @@ export interface AdminProcurementOrder {
   created_at: string
   updated_at: string
   connection_name?: string
+  connection?: { id: number; name: string; type?: string; base_url?: string }
+  [key: string]: unknown
 }
 
 // --- Reconciliation ---
@@ -382,10 +421,18 @@ export interface AdminReconciliationJob {
   total_items: number
   matched_items: number
   mismatched_items: number
+  mismatched_count?: number
+  total_count?: number
+  matched_count?: number
   missing_items: number
   created_at: string
   updated_at: string
+  started_at?: string
+  finished_at?: string
+  result_json?: string
   connection_name?: string
+  connection?: { name?: string; [key: string]: unknown }
+  [key: string]: unknown
 }
 
 export interface AdminReconciliationItem {
@@ -396,8 +443,13 @@ export interface AdminReconciliationItem {
   upstream_order_no?: string
   local_amount?: number
   upstream_amount?: number
+  local_status?: string
+  upstream_status?: string
+  mismatch_type?: string
   status: string
   resolution?: string
+  resolved?: boolean
+  remark?: string
   resolved_by?: string
   resolved_at?: string
   created_at: string
@@ -415,10 +467,12 @@ export interface AdminApiCredential {
   ip_whitelist: string[]
   rate_limit: number
   last_used_at?: string
+  approved_at?: string
   reject_reason?: string
   created_at: string
   updated_at: string
   user_email?: string
+  user?: { id: number; email: string; display_name?: string }
 }
 
 // --- Dashboard ---
@@ -471,12 +525,19 @@ export interface AdminAffiliateCommission {
   order_no: string
   amount: number
   rate: number
+  base_amount?: number
+  rate_percent?: number
+  commission_amount?: number
   status: string
   confirmed_at?: string
+  confirm_at?: string
+  available_at?: string
   created_at: string
   updated_at: string
   affiliate_code?: string
   user_email?: string
+  affiliate_profile?: { id: number; user_id: number; code: string; user_email?: string; user_display_name?: string; user?: { id: number; email: string; display_name?: string } }
+  order?: { id: number; order_no: string; total_amount?: number }
 }
 
 export interface AdminAffiliateWithdraw {
@@ -485,11 +546,15 @@ export interface AdminAffiliateWithdraw {
   amount: number
   channel: string
   account_info: string
+  account?: string
   status: string
   reject_reason?: string
   paid_at?: string
+  processed_at?: string
+  processor?: { username?: string; [key: string]: unknown } | string
   created_at: string
   updated_at: string
   affiliate_code?: string
   user_email?: string
+  affiliate_profile?: { id: number; user_id: number; code: string; user_email?: string; user_display_name?: string; user?: { id: number; email: string; display_name?: string } }
 }

@@ -96,7 +96,7 @@ const toLocalInput = (raw?: string) => {
   return local.toISOString().slice(0, 16)
 }
 
-const formatMoney = (amount?: string, currency?: string) => {
+const formatMoney = (amount?: string | number, currency?: string) => {
   if (!amount) return '-'
   return `${amount} ${currency || ''}`.trim()
 }

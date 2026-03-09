@@ -150,7 +150,7 @@ const syncSkuSelection = () => {
     return
   }
   if (availableSkus.value.length === 1) {
-    skuFilterValue.value = String(availableSkus.value[0].id)
+    skuFilterValue.value = String(availableSkus.value[0]!.id)
     return
   }
   const matched = availableSkus.value.some((sku) => sku.id === currentSkuId.value)
@@ -248,7 +248,7 @@ const loadProductOptions = async () => {
             'en-US': `#${currentProductId.value}`,
           },
           fulfillment_type: 'auto',
-        } as AdminProduct)
+        } as unknown as AdminProduct)
       }
     }
 

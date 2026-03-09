@@ -2,9 +2,7 @@ import { api, type ApiResponse } from './client'
 import type {
   AdminCategory,
   AdminProduct,
-  AdminProductSKU,
   AdminOrder,
-  AdminOrderItem,
   AdminFulfillment,
   AdminCardSecret,
   AdminCardSecretBatch,
@@ -343,7 +341,7 @@ export const adminAPI = {
   getPromotions: (params?: Record<string, unknown>) => api.get<ApiResponse<AdminPromotion[]>>('/admin/promotions', { params }),
   updatePromotion: (id: number, data: Partial<AdminPromotion>) => api.put<ApiResponse<AdminPromotion>>(`/admin/promotions/${id}`, data),
   deletePromotion: (id: number) => api.delete<ApiResponse>(`/admin/promotions/${id}`),
-  createCardSecretBatch: (data: { product_id: number; sku_id: number; name: string; secrets: string[] }) => api.post<ApiResponse<AdminCardSecretBatch>>('/admin/card-secrets/batch', data),
+  createCardSecretBatch: (data: { product_id: number; sku_id?: number; name?: string; secrets: string[]; batch_no?: string; note?: string }) => api.post<ApiResponse<AdminCardSecretBatch>>('/admin/card-secrets/batch', data),
   importCardSecretCSV: (formData: FormData) =>
     api.post<ApiResponse>('/admin/card-secrets/import', formData, {
       headers: {
@@ -368,7 +366,7 @@ export const adminAPI = {
   updateSiteConnection: (id: number, data: Partial<AdminSiteConnection>) => api.put<ApiResponse<AdminSiteConnection>>(`/admin/site-connections/${id}`, data),
   deleteSiteConnection: (id: number) => api.delete<ApiResponse>(`/admin/site-connections/${id}`),
   pingSiteConnection: (id: number) => api.post<ApiResponse>(`/admin/site-connections/${id}/ping`),
-  updateSiteConnectionStatus: (id: number, data: { is_active: boolean }) => api.put<ApiResponse>(`/admin/site-connections/${id}/status`, data),
+  updateSiteConnectionStatus: (id: number, data: { is_active?: boolean; status?: string }) => api.put<ApiResponse>(`/admin/site-connections/${id}/status`, data),
   // Product Mappings
   getProductMappings: (params?: Record<string, unknown>) => api.get<ApiResponse<AdminProductMapping[]>>('/admin/product-mappings', { params }),
   getProductMapping: (id: number) => api.get<ApiResponse<AdminProductMapping>>(`/admin/product-mappings/${id}`),
@@ -388,7 +386,7 @@ export const adminAPI = {
   runReconciliation: (data: { connection_id: number; type: string; time_range_start: string; time_range_end: string }) => api.post<ApiResponse<AdminReconciliationJob>>('/admin/reconciliation/run', data),
   getReconciliationJobs: (params?: Record<string, unknown>) => api.get<ApiResponse<AdminReconciliationJob[]>>('/admin/reconciliation/jobs', { params }),
   getReconciliationJob: (id: number, params?: Record<string, unknown>) => api.get<ApiResponse<AdminReconciliationJob & { items?: AdminReconciliationItem[] }>>(`/admin/reconciliation/jobs/${id}`, { params }),
-  resolveReconciliationItem: (id: number, data: { resolution: string }) => api.put<ApiResponse<AdminReconciliationItem>>(`/admin/reconciliation/items/${id}/resolve`, data),
+  resolveReconciliationItem: (id: number, data: { resolution?: string; remark?: string }) => api.put<ApiResponse<AdminReconciliationItem>>(`/admin/reconciliation/items/${id}/resolve`, data),
 
   // API 凭证管理
   getApiCredentials: (params?: Record<string, unknown>) => api.get<ApiResponse<AdminApiCredential[]>>('/admin/api-credentials', { params }),

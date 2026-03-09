@@ -210,7 +210,7 @@ const handleDelete = async (conn: AdminSiteConnection) => {
   }
 }
 
-const statusBadgeClass = (status: string) => {
+const statusBadgeClass = (status?: string) => {
   switch (status) {
     case 'active':
       return 'text-emerald-700 border-emerald-200 bg-emerald-50'
@@ -221,7 +221,7 @@ const statusBadgeClass = (status: string) => {
   }
 }
 
-const statusLabel = (status: string) => {
+const statusLabel = (status?: string) => {
   const key = `siteConnections.status.${status}`
   const translated = t(key)
   return translated !== key ? translated : status

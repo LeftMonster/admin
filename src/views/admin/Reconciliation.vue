@@ -99,7 +99,7 @@ const fetchJobs = async (page = 1) => {
     if (filters.connection_id && filters.connection_id !== '__all__') params.connection_id = filters.connection_id
 
     const res = await adminAPI.getReconciliationJobs(params)
-    jobs.value = res.data.data || []
+    jobs.value = (res.data.data || []) as (AdminReconciliationJob & Record<string, unknown>)[]
     const p = res.data.pagination
     if (p) {
       pagination.page = p.page
@@ -158,7 +158,7 @@ const handleNewJob = async () => {
 const openDetail = async (job: AdminReconciliationJob) => {
   try {
     const res = await adminAPI.getReconciliationJob(job.id, { items_page: 1, items_page_size: 20 })
-    const data = res.data.data as Record<string, unknown>
+    const data = res.data.data as unknown as Record<string, unknown>
     detailJob.value = (data.job || job) as AdminReconciliationJob & Record<string, unknown>
     detailItems.value = (data.items as (AdminReconciliationItem & Record<string, unknown>)[]) || []
     detailItemsTotal.value = (data.items_total as number) || 0
@@ -175,7 +175,7 @@ const loadDetailItems = async (page: number) => {
   if (!detailJob.value) return
   try {
     const res = await adminAPI.getReconciliationJob(detailJob.value.id, { items_page: page, items_page_size: 20 })
-    const data = res.data.data as Record<string, unknown>
+    const data = res.data.data as unknown as Record<string, unknown>
     detailItems.value = (data.items as (AdminReconciliationItem & Record<string, unknown>)[]) || []
     detailItemsTotal.value = (data.items_total as number) || 0
     detailItemsPage.value = page
@@ -343,7 +343,7 @@ onMounted(() => {
               <IdCell :value="job.id" />
             </TableCell>
             <TableCell class="px-6 py-4 font-medium text-foreground">
-              {{ job.connection?.name || job.connection_id || '-' }}
+              {{ (job.connection as any)?.name || job.connection_id || '-' }}
             </TableCell>
             <TableCell class="px-6 py-4">
               <span class="text-xs">{{ t('reconciliation.type.' + job.type) }}</span>
@@ -361,7 +361,7 @@ onMounted(() => {
             </TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">{{ job.total_count }}</TableCell>
             <TableCell class="px-6 py-4 text-xs text-emerald-600">{{ job.matched_count }}</TableCell>
-            <TableCell class="px-6 py-4 text-xs" :class="job.mismatched_count > 0 ? 'text-red-600 font-semibold' : 'text-muted-foreground'">
+            <TableCell class="px-6 py-4 text-xs" :class="(job.mismatched_count as number) > 0 ? 'text-red-600 font-semibold' : 'text-muted-foreground'">
               {{ job.mismatched_count }}
             </TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">
@@ -460,7 +460,7 @@ onMounted(() => {
             </div>
             <div>
               <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('reconciliation.columns.connection') }}</label>
-              <div class="text-sm">{{ detailJob.connection?.name || detailJob.connection_id || '-' }}</div>
+              <div class="text-sm">{{ (detailJob.connection as any)?.name || detailJob.connection_id || '-' }}</div>
             </div>
             <div>
               <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('reconciliation.columns.type') }}</label>
@@ -483,7 +483,7 @@ onMounted(() => {
               <div class="text-sm">
                 <span class="text-emerald-600">{{ detailJob.matched_count }}</span>
                 /
-                <span :class="detailJob.mismatched_count > 0 ? 'text-red-600 font-semibold' : ''">{{ detailJob.mismatched_count }}</span>
+                <span :class="(detailJob.mismatched_count as number) > 0 ? 'text-red-600 font-semibold' : ''">{{ detailJob.mismatched_count }}</span>
               </div>
             </div>
             <div>
@@ -492,11 +492,11 @@ onMounted(() => {
             </div>
             <div>
               <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('reconciliation.columns.startedAt') }}</label>
-              <div class="text-sm">{{ formatTime(detailJob.started_at) }}</div>
+              <div class="text-sm">{{ formatTime(detailJob.started_at as string) }}</div>
             </div>
             <div>
               <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('reconciliation.columns.finishedAt') }}</label>
-              <div class="text-sm">{{ formatTime(detailJob.finished_at) }}</div>
+              <div class="text-sm">{{ formatTime(detailJob.finished_at as string) }}</div>
             </div>
           </div>
 
@@ -532,7 +532,7 @@ onMounted(() => {
                     <TableCell class="px-4 py-3">
                       <span
                         class="inline-flex rounded-full border px-2 py-0.5 text-xs"
-                        :class="mismatchBadgeClass(item.mismatch_type)"
+                        :class="mismatchBadgeClass(item.mismatch_type as string)"
                       >
                         {{ t('reconciliation.mismatchType.' + item.mismatch_type) }}
                       </span>

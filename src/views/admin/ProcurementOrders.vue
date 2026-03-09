@@ -245,15 +245,15 @@ const getOrderTitle = (order: ProcurementOrderWithRelations) => {
   const localOrder = order.local_order
   if (!localOrder) return order.local_order_no || '-'
   const items = localOrder.items || []
-  if (items.length > 0 && items[0].title) {
-    return getLocalizedText(items[0].title)
+  if (items.length > 0 && items[0]?.title) {
+    return getLocalizedText(items[0]!.title)
   }
   return order.local_order_no || '-'
 }
 
 const profitAmount = (order: ProcurementOrderWithRelations) => {
-  const sell = parseFloat(order.local_sell_amount || '0')
-  const cost = parseFloat(order.upstream_amount || '0')
+  const sell = parseFloat(String(order.local_sell_amount || 0))
+  const cost = parseFloat(String(order.upstream_amount || 0))
   if (!cost || !sell) return null
   return (sell - cost).toFixed(2)
 }
@@ -439,7 +439,7 @@ onMounted(() => {
             </div>
             <div>
               <span class="text-muted-foreground">{{ t('procurement.columns.upstreamAmount') }}</span>
-              <div class="mt-0.5 font-medium text-foreground">{{ order.upstream_amount && order.upstream_amount !== '0.00' ? formatMoney(order.upstream_amount, order.currency) : '-' }}</div>
+              <div class="mt-0.5 font-medium text-foreground">{{ order.upstream_amount && String(order.upstream_amount) !== '0.00' ? formatMoney(order.upstream_amount, order.currency) : '-' }}</div>
             </div>
             <div>
               <span class="text-muted-foreground">{{ t('procurement.detail.profit') }}</span>
@@ -555,7 +555,7 @@ onMounted(() => {
               <div class="p-4 text-center">
                 <div class="text-xs text-muted-foreground">{{ t('procurement.columns.upstreamAmount') }}</div>
                 <div class="mt-1 text-lg font-bold">
-                  {{ detailOrder.upstream_amount && detailOrder.upstream_amount !== '0.00' ? formatMoney(detailOrder.upstream_amount, detailOrder.currency) : '-' }}
+                  {{ detailOrder.upstream_amount && String(detailOrder.upstream_amount) !== '0.00' ? formatMoney(detailOrder.upstream_amount, detailOrder.currency) : '-' }}
                 </div>
               </div>
               <div class="p-4 text-center">

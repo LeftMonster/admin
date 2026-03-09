@@ -82,7 +82,8 @@ const getLocalPriceRange = (mapping: AdminProductMapping & { product?: AdminProd
   const p = mapping.product
   if (!p) return '-'
   if (!p.skus || p.skus.length === 0) return p.price_amount || '-'
-  const prices = p.skus.map((s: AdminProductSKU) => parseFloat(String(s.price_amount))).filter((v: number) => !isNaN(v) && v > 0)
+  const skus = p.skus as AdminProductSKU[]
+  const prices = skus.map((s) => parseFloat(String(s.price_amount))).filter((v) => !isNaN(v) && v > 0)
   if (prices.length === 0) return p.price_amount || '-'
   const min = Math.min(...prices)
   const max = Math.max(...prices)
@@ -122,7 +123,7 @@ const toggleMappingExpand = async (mapping: AdminProductMapping & { product?: Ad
   detailData.value = null
   try {
     const res = await adminAPI.getProductMapping(mapping.id)
-    detailData.value = res.data.data
+    detailData.value = res.data.data as unknown as MappingDetail
   } catch {
     detailData.value = null
   } finally {
@@ -418,7 +419,7 @@ onMounted(() => { fetchConnections(); fetchCategories(); fetchMappings() })
               <span>{{ t('productMappings.detail.upstreamId') }}: <span class="font-mono text-foreground">{{ mapping.upstream_product_id }}</span></span>
               <span>{{ t('productMappings.detail.localPrice') }}: <span class="font-mono text-foreground">{{ getLocalPriceRange(mapping) }}</span></span>
               <span>SKU: <span class="text-foreground">{{ getLocalSkuCount(mapping) }}</span></span>
-              <span>{{ t('productMappings.columns.lastSynced') }}: {{ formatTime(mapping.last_synced_at) }}</span>
+              <span>{{ t('productMappings.columns.lastSynced') }}: {{ formatTime((mapping.last_synced_at ?? mapping.last_sync_at) as string | undefined) }}</span>
             </div>
           </div>
 
@@ -465,7 +466,7 @@ onMounted(() => { fetchConnections(); fetchCategories(); fetchMappings() })
                     <td colspan="7" class="px-3 py-6 text-center text-muted-foreground">{{ t('productMappings.detail.noSkus') }}</td>
                   </tr>
                   <tr
-                    v-for="sku in mapping.product?.skus || []"
+                    v-for="sku in (mapping.product?.skus as AdminProductSKU[] | undefined) || []"
                     :key="sku.id"
                     class="hover:bg-muted/20"
                   >
@@ -474,17 +475,17 @@ onMounted(() => { fetchConnections(); fetchCategories(); fetchMappings() })
                     <td class="px-3 py-2.5 text-right font-mono text-foreground">{{ sku.price_amount }}</td>
                     <td class="px-3 py-2.5 text-right font-mono">
                       <template v-if="skuMappingByLocalId[sku.id]">
-                        <span class="text-foreground">{{ skuMappingByLocalId[sku.id].upstream_price }}</span>
+                        <span class="text-foreground">{{ skuMappingByLocalId[sku.id]?.upstream_price }}</span>
                       </template>
                       <span v-else class="text-muted-foreground">-</span>
                     </td>
                     <td class="px-3 py-2.5 text-center">
                       <template v-if="skuMappingByLocalId[sku.id]">
                         <span
-                          v-if="parseFloat(sku.price_amount) !== parseFloat(skuMappingByLocalId[sku.id].upstream_price)"
+                          v-if="Number(sku.price_amount) !== Number(skuMappingByLocalId[sku.id]?.upstream_price)"
                           class="inline-flex rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200"
                         >
-                          {{ (parseFloat(sku.price_amount) - parseFloat(skuMappingByLocalId[sku.id].upstream_price)).toFixed(2) }}
+                          {{ (Number(sku.price_amount) - Number(skuMappingByLocalId[sku.id]?.upstream_price)).toFixed(2) }}
                         </span>
                         <span v-else class="text-emerald-600">-</span>
                       </template>
@@ -494,11 +495,11 @@ onMounted(() => { fetchConnections(); fetchCategories(); fetchMappings() })
                       <template v-if="skuMappingByLocalId[sku.id]">
                         <span
                           class="inline-flex rounded-full px-1.5 py-0.5 text-[10px]"
-                          :class="skuMappingByLocalId[sku.id].upstream_stock > 0
+                          :class="(skuMappingByLocalId[sku.id]?.upstream_stock ?? 0) > 0
                             ? 'text-emerald-700 bg-emerald-50'
                             : 'text-red-600 bg-red-50'"
                         >
-                          {{ skuMappingByLocalId[sku.id].upstream_stock > 0 ? t('productMappings.import.inStock') : t('productMappings.import.outOfStock') }}
+                          {{ (skuMappingByLocalId[sku.id]?.upstream_stock ?? 0) > 0 ? t('productMappings.import.inStock') : t('productMappings.import.outOfStock') }}
                         </span>
                       </template>
                       <span v-else class="text-muted-foreground">-</span>
@@ -507,7 +508,7 @@ onMounted(() => { fetchConnections(); fetchCategories(); fetchMappings() })
                       <template v-if="skuMappingByLocalId[sku.id]">
                         <span
                           class="inline-block h-2 w-2 rounded-full"
-                          :class="skuMappingByLocalId[sku.id].upstream_is_active ? 'bg-emerald-500' : 'bg-gray-300'"
+                          :class="skuMappingByLocalId[sku.id]?.upstream_is_active ? 'bg-emerald-500' : 'bg-gray-300'"
                         />
                       </template>
                       <span v-else class="text-muted-foreground">-</span>

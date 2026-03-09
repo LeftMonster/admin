@@ -93,7 +93,7 @@ const form = reactive({
   id: 0,
   title: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
   slug: '',
-  seo_meta: { keywords: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' }, description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } } as Record<string, LocalizedText>,
+  seo_meta: { keywords: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' }, description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } } as { keywords: LocalizedText; description: LocalizedText; [key: string]: LocalizedText },
   description: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
   content: { 'zh-CN': '', 'zh-TW': '', 'en-US': '' } as LocalizedText,
   price_amount: 0,
@@ -492,9 +492,9 @@ const handleSubmit = async () => {
     }
 
     if (isEditing.value) {
-      await adminAPI.updateProduct(form.id, payload)
+      await adminAPI.updateProduct(form.id, payload as unknown as Partial<AdminProduct>)
     } else {
-      await adminAPI.createProduct(payload)
+      await adminAPI.createProduct(payload as unknown as Partial<AdminProduct>)
     }
     closeModal()
     emit('success')
@@ -904,7 +904,7 @@ watch(
 
           <div class="col-span-2">
             <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.products.form.content', { lang: getCurrentLangName() }) }}</label>
-            <RichEditor v-model="form.content[currentLang]" :placeholder="t('admin.products.form.contentPlaceholder')" />
+            <RichEditor :model-value="form.content[currentLang] || ''" @update:model-value="(v: string) => form.content[currentLang] = v" :placeholder="t('admin.products.form.contentPlaceholder')" />
             <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.products.form.contentTip') }}</p>
           </div>
 

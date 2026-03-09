@@ -214,7 +214,7 @@ const loadOverview = async (forceRefresh = false) => {
       return
     }
     const response = await adminAPI.getDashboardOverview(params)
-    overview.value = response.data.data as DashboardOverview
+    overview.value = response.data.data as unknown as DashboardOverview
   } finally {
     loadingOverview.value = false
   }
@@ -229,7 +229,7 @@ const loadTrends = async (forceRefresh = false) => {
       return
     }
     const response = await adminAPI.getDashboardTrends(params)
-    trends.value = response.data.data as DashboardTrends
+    trends.value = response.data.data as unknown as DashboardTrends
   } finally {
     loadingTrends.value = false
   }
@@ -244,7 +244,7 @@ const loadRankings = async (forceRefresh = false) => {
       return
     }
     const response = await adminAPI.getDashboardRankings(params)
-    rankings.value = response.data.data as DashboardRankings
+    rankings.value = response.data.data as unknown as DashboardRankings
   } finally {
     loadingRankings.value = false
   }

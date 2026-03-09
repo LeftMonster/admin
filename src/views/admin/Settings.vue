@@ -65,7 +65,7 @@ const fallbackCurrencyOptions = [
 const currencyOptions = computed(() => {
   const values: string[] = []
   if (typeof Intl !== 'undefined' && typeof (Intl as Record<string, unknown>).supportedValuesOf === 'function') {
-    const candidate = (Intl as Record<string, unknown> & { supportedValuesOf: (key: string) => unknown }).supportedValuesOf('currency')
+    const candidate = (Intl as unknown as Record<string, unknown> & { supportedValuesOf: (key: string) => unknown }).supportedValuesOf('currency')
     if (Array.isArray(candidate)) {
       values.push(...candidate.map((item: unknown) => String(item || '').trim().toUpperCase()))
     }
