@@ -114,6 +114,12 @@ const routes = [
         meta: { permission: 'GET:/admin/promotions' },
       },
       {
+        path: 'member-levels',
+        name: 'member-levels',
+        component: () => import('@/views/admin/MemberLevels.vue'),
+        meta: { permission: 'GET:/admin/member-levels' },
+      },
+      {
         path: 'settings',
         name: 'settings',
         component: () => import('@/views/admin/Settings.vue'),

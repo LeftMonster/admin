@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { adminAPI, type AdminWalletAccount, type AdminWalletTransaction } from '@/api/admin'
-import type { AdminUser, AdminOrder, AdminPayment } from '@/api/types'
+import type { AdminUser, AdminOrder, AdminPayment, AdminMemberLevel } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -96,6 +96,40 @@ const fetchSiteCurrency = async () => {
     siteCurrency.value = /^[A-Z]{3}$/.test(raw) ? raw : 'CNY'
   } catch {
     siteCurrency.value = 'CNY'
+  }
+}
+
+const memberLevels = ref<AdminMemberLevel[]>([])
+const memberLevelUpdating = ref(false)
+
+const fetchMemberLevels = async () => {
+  try {
+    const response = await adminAPI.getMemberLevels({ page: 1, page_size: 100 })
+    memberLevels.value = response.data.data || []
+  } catch {
+    memberLevels.value = []
+  }
+}
+
+const currentMemberLevelName = computed(() => {
+  const levelId = Number(user.value?.member_level_id || 0)
+  if (!levelId) return '-'
+  const level = memberLevels.value.find((l) => l.id === levelId)
+  if (!level) return `#${levelId}`
+  return getLocalizedText(level.name)
+})
+
+const handleMemberLevelChange = async (value: string) => {
+  const levelId = Number(value)
+  if (!Number.isFinite(levelId) || !user.value) return
+  memberLevelUpdating.value = true
+  try {
+    await adminAPI.setUserMemberLevel(userId.value, levelId)
+    user.value.member_level_id = levelId
+  } catch {
+    // revert
+  } finally {
+    memberLevelUpdating.value = false
   }
 }
 
@@ -337,6 +371,7 @@ onMounted(() => {
   fetchSiteCurrency()
   fetchUser()
   fetchOrders()
+  fetchMemberLevels()
 })
 
 watch(
@@ -430,6 +465,33 @@ watch(
         <CardContent class="p-3">
           <div class="text-xs text-muted-foreground">{{ t('admin.userDetail.fields.walletBalance') }}</div>
           <div class="text-sm font-mono text-foreground">{{ formatMoney(user?.wallet_balance, siteCurrency) }}</div>
+        </CardContent>
+      </Card>
+      <Card class="rounded-lg border-border bg-background shadow-none">
+        <CardContent class="p-3">
+          <div class="text-xs text-muted-foreground">{{ t('admin.userDetail.fields.memberLevel') }}</div>
+          <div class="mt-1">
+            <Select
+              :model-value="String(user?.member_level_id || 0)"
+              :disabled="memberLevelUpdating"
+              @update:model-value="handleMemberLevelChange"
+            >
+              <SelectTrigger class="h-8 w-full">
+                <SelectValue>{{ currentMemberLevelName }}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">-</SelectItem>
+                <SelectItem
+                  v-for="level in memberLevels"
+                  :key="level.id"
+                  :value="String(level.id)"
+                >
+                  {{ level.icon }} {{ getLocalizedText(level.name) }}
+                  <span v-if="level.is_default" class="text-muted-foreground">({{ t('admin.memberLevels.default') }})</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
     </div>

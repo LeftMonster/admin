@@ -229,6 +229,32 @@ export interface AdminGiftCardBatch {
   created_at: string
 }
 
+// --- MemberLevel ---
+export interface AdminMemberLevel {
+  id: number
+  name: LocalizedText
+  slug: string
+  icon: string
+  discount_rate: number
+  recharge_threshold: number
+  spend_threshold: number
+  is_default: boolean
+  sort_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminMemberLevelPrice {
+  id: number
+  member_level_id: number
+  product_id: number
+  sku_id: number
+  price_amount: number
+  created_at: string
+  updated_at: string
+}
+
 // --- Promotion ---
 export interface AdminPromotion {
   id: number
@@ -377,6 +403,9 @@ export interface AdminUser {
   nickname?: string
   locale: string
   status: string
+  member_level_id?: number
+  total_recharged?: number | string
+  total_spent?: number | string
   wallet_balance?: number | string
   email_verified_at?: string
   last_login_at?: string

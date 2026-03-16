@@ -3,10 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { AdminUser } from '@/api/types'
+import type { AdminUser, AdminMemberLevel } from '@/api/types'
 import IdCell from '@/components/IdCell.vue'
 import { userStatusClass, userStatusLabel } from '@/utils/status'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate, formatMoney, getLocalizedText } from '@/utils/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog'
@@ -88,6 +88,29 @@ const fetchSiteCurrency = async () => {
   } catch {
     siteCurrency.value = 'CNY'
   }
+}
+
+const memberLevelsMap = ref<Map<number, AdminMemberLevel>>(new Map())
+
+const fetchMemberLevels = async () => {
+  try {
+    const response = await adminAPI.getMemberLevels({ page: 1, page_size: 100 })
+    const list = response.data.data || []
+    const map = new Map<number, AdminMemberLevel>()
+    list.forEach((l: AdminMemberLevel) => map.set(l.id, l))
+    memberLevelsMap.value = map
+  } catch {
+    // ignore
+  }
+}
+
+const getMemberLevelLabel = (user: AdminUser) => {
+  const levelId = Number(user.member_level_id || 0)
+  if (!levelId) return '-'
+  const level = memberLevelsMap.value.get(levelId)
+  if (!level) return `#${levelId}`
+  const icon = level.icon ? level.icon + ' ' : ''
+  return icon + getLocalizedText(level.name)
 }
 
 const handleSearch = () => {
@@ -209,6 +232,7 @@ const formatLocale = (raw?: string) => {
 onMounted(() => {
   fetchSiteCurrency()
   fetchUsers()
+  fetchMemberLevels()
 })
 </script>
 
@@ -290,6 +314,7 @@ onMounted(() => {
             <TableHead class="px-6 py-3">{{ t('admin.users.table.status') }}</TableHead>
             <TableHead class="px-6 py-3">{{ t('admin.users.table.locale') }}</TableHead>
             <TableHead class="px-6 py-3">{{ t('admin.users.table.walletBalance') }}</TableHead>
+            <TableHead class="px-6 py-3">{{ t('admin.users.table.memberLevel') }}</TableHead>
             <TableHead class="px-6 py-3">{{ t('admin.users.table.createdAt') }}</TableHead>
             <TableHead class="px-6 py-3">{{ t('admin.users.table.lastLoginAt') }}</TableHead>
             <TableHead class="px-6 py-3 text-right">{{ t('admin.users.table.action') }}</TableHead>
@@ -297,12 +322,12 @@ onMounted(() => {
         </TableHeader>
         <TableBody class="divide-y divide-border">
           <TableRow v-if="loading">
-            <TableCell :colspan="10" class="p-0">
+            <TableCell :colspan="11" class="p-0">
               <TableSkeleton :columns="10" :rows="5" />
             </TableCell>
           </TableRow>
           <TableRow v-else-if="users.length === 0">
-            <TableCell colspan="10" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.users.empty') }}</TableCell>
+            <TableCell colspan="11" class="px-6 py-8 text-center text-muted-foreground">{{ t('admin.users.empty') }}</TableCell>
           </TableRow>
           <TableRow v-for="user in users" :key="user.id" class="hover:bg-muted/30">
             <TableCell class="px-6 py-4">
@@ -320,6 +345,7 @@ onMounted(() => {
             </TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">{{ formatLocale(user.locale) }}</TableCell>
             <TableCell class="px-6 py-4 text-xs font-mono text-foreground">{{ formatMoney(user.wallet_balance, siteCurrency) }}</TableCell>
+            <TableCell class="px-6 py-4 text-xs text-foreground">{{ getMemberLevelLabel(user) }}</TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">{{ formatDate(user.created_at) }}</TableCell>
             <TableCell class="px-6 py-4 text-xs text-muted-foreground">{{ formatDate(user.last_login_at) }}</TableCell>
             <TableCell class="px-6 py-4 text-right">

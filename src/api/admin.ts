@@ -9,6 +9,8 @@ import type {
   AdminCoupon,
   AdminGiftCard,
   AdminGiftCardBatch,
+  AdminMemberLevel,
+  AdminMemberLevelPrice,
   AdminPromotion,
   AdminBanner,
   AdminPost,
@@ -344,6 +346,16 @@ export const adminAPI = {
   getPromotions: (params?: Record<string, unknown>) => api.get<ApiResponse<AdminPromotion[]>>('/admin/promotions', { params }),
   updatePromotion: (id: number, data: Partial<AdminPromotion>) => api.put<ApiResponse<AdminPromotion>>(`/admin/promotions/${id}`, data),
   deletePromotion: (id: number) => api.delete<ApiResponse>(`/admin/promotions/${id}`),
+
+  // 会员等级
+  getMemberLevels: (params?: Record<string, unknown>) => api.get<ApiResponse<AdminMemberLevel[]>>('/admin/member-levels', { params }),
+  createMemberLevel: (data: Partial<AdminMemberLevel>) => api.post<ApiResponse<AdminMemberLevel>>('/admin/member-levels', data),
+  updateMemberLevel: (id: number, data: Partial<AdminMemberLevel>) => api.put<ApiResponse<AdminMemberLevel>>(`/admin/member-levels/${id}`, data),
+  deleteMemberLevel: (id: number) => api.delete<ApiResponse>(`/admin/member-levels/${id}`),
+  getMemberLevelPrices: (productId: number) => api.get<ApiResponse<AdminMemberLevelPrice[]>>('/admin/member-level-prices', { params: { product_id: productId } }),
+  batchUpsertMemberLevelPrices: (data: { prices: Partial<AdminMemberLevelPrice>[] }) => api.post<ApiResponse>('/admin/member-level-prices/batch', data),
+  deleteMemberLevelPrice: (id: number) => api.delete<ApiResponse>(`/admin/member-level-prices/${id}`),
+  setUserMemberLevel: (userId: number, memberLevelId: number) => api.put<ApiResponse>(`/admin/users/${userId}/member-level`, { member_level_id: memberLevelId }),
   createCardSecretBatch: (data: { product_id: number; sku_id?: number; name?: string; secrets: string[]; batch_no?: string; note?: string }) => api.post<ApiResponse<AdminCardSecretBatch>>('/admin/card-secrets/batch', data),
   importCardSecretCSV: (formData: FormData) =>
     api.post<ApiResponse>('/admin/card-secrets/import', formData, {

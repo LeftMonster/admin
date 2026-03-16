@@ -38,6 +38,7 @@ import {
   Bot,
   Wifi,
   Send,
+  Crown,
 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -174,6 +175,12 @@ const navGroups = computed<NavGroup[]>(() => {
           to: '/user-login-logs',
           icon: History,
           permission: 'GET:/admin/user-login-logs',
+        },
+        {
+          label: t('admin.navItems.memberLevels'),
+          to: '/member-levels',
+          icon: Crown,
+          permission: 'GET:/admin/member-levels',
         },
       ],
     },
