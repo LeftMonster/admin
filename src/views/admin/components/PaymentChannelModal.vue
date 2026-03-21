@@ -621,7 +621,10 @@ watch(
     } else if (value === 'tokenpay') {
       form.channel_type = 'usdt'
     }
-    form.interaction_mode = pickDefaultInteractionMode()
+    const allowedInteractionModes = interactionModeOptions.value.map((item) => item.value)
+    if (!allowedInteractionModes.includes(form.interaction_mode)) {
+      form.interaction_mode = pickDefaultInteractionMode()
+    }
   }
 )
 
