@@ -50,6 +50,7 @@ const languages = computed(() => [
 
 const tabs = computed(() => [
   { label: t('admin.settings.tabs.basic'), value: 'basic' },
+  { label: t('admin.settings.tabs.template'), value: 'template' },
   { label: t('admin.settings.tabs.about'), value: 'about' },
   { label: t('admin.settings.tabs.legal'), value: 'legal' },
   { label: t('admin.settings.tabs.smtp'), value: 'smtp' },
@@ -184,6 +185,7 @@ const form = reactive({
   },
   scripts: [] as SiteScriptItem[],
   footer_links: [] as FooterLinkItem[],
+  template_mode: 'card' as 'card' | 'list',
 })
 
 const smtpData = reactive({
@@ -358,6 +360,9 @@ const fetchSettings = async () => {
 
       const footerLinks = normalizeFooterLinks(data.footer_links)
       form.footer_links.splice(0, form.footer_links.length, ...footerLinks)
+
+      const rawTemplateMode = String(data.template_mode || 'card').trim()
+      form.template_mode = rawTemplateMode === 'list' ? 'list' : 'card'
     }
 
     if (smtpRes.data && smtpRes.data.data) {
@@ -465,6 +470,7 @@ const saveSiteSettings = async () => {
       legal: form.legal,
       scripts: form.scripts,
       footer_links: form.footer_links,
+      template_mode: form.template_mode,
     },
   }
   await adminAPI.updateSettings(payload)
@@ -790,6 +796,75 @@ onMounted(() => {
               <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.scripts.code') }}</label>
               <Textarea v-model="script.code" rows="7" class="font-mono text-xs" :placeholder="t('admin.settings.scripts.codePlaceholder')" />
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Template Mode Tab -->
+    <div v-show="currentTab === 'template'" class="space-y-6">
+      <div class="rounded-xl border border-border bg-card">
+        <div class="flex flex-col gap-3 border-b border-border bg-muted/40 px-6 py-4">
+          <div>
+            <h2 class="text-lg font-semibold">{{ t('admin.settings.template.title') }}</h2>
+            <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.template.subtitle') }}</p>
+          </div>
+        </div>
+        <div class="px-6 py-6 space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Card Mode -->
+            <label
+              class="relative flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 p-6 transition-all"
+              :class="form.template_mode === 'card'
+                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                : 'border-border hover:border-muted-foreground/30'"
+            >
+              <input type="radio" v-model="form.template_mode" value="card" class="sr-only" />
+              <div class="flex h-16 w-16 items-center justify-center rounded-xl" :class="form.template_mode === 'card' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+              </div>
+              <div class="text-center">
+                <div class="font-semibold" :class="form.template_mode === 'card' ? 'text-primary' : ''">{{ t('admin.settings.template.cardMode') }}</div>
+                <div class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.template.cardModeDesc') }}</div>
+              </div>
+              <div v-if="form.template_mode === 'card'" class="absolute right-3 top-3">
+                <svg class="h-5 w-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+              </div>
+            </label>
+
+            <!-- List Mode -->
+            <label
+              class="relative flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 p-6 transition-all"
+              :class="form.template_mode === 'list'
+                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                : 'border-border hover:border-muted-foreground/30'"
+            >
+              <input type="radio" v-model="form.template_mode" value="list" class="sr-only" />
+              <div class="flex h-16 w-16 items-center justify-center rounded-xl" :class="form.template_mode === 'list' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" d="M3 6h18M3 12h18M3 18h18" />
+                  <circle cx="3" cy="6" r="1" fill="currentColor" />
+                  <circle cx="3" cy="12" r="1" fill="currentColor" />
+                  <circle cx="3" cy="18" r="1" fill="currentColor" />
+                </svg>
+              </div>
+              <div class="text-center">
+                <div class="font-semibold" :class="form.template_mode === 'list' ? 'text-primary' : ''">{{ t('admin.settings.template.listMode') }}</div>
+                <div class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.template.listModeDesc') }}</div>
+              </div>
+              <div v-if="form.template_mode === 'list'" class="absolute right-3 top-3">
+                <svg class="h-5 w-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+              </div>
+            </label>
           </div>
         </div>
       </div>

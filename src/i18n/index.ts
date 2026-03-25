@@ -1927,6 +1927,7 @@ const messages = {
         },
         tabs: {
           basic: '基础配置 (Basic)',
+          template: '模板配置 (Template)',
           scripts: '前台脚本 (Scripts)',
           about: '关于我们 (About)',
           legal: '法律条款 (Legal/Terms)',
@@ -1937,6 +1938,14 @@ const messages = {
           dashboard: '仪表盘 (Dashboard)',
           affiliate: '推广返利 (Affiliate)',
           security: '安全设置 (Security)',
+        },
+        template: {
+          title: '前台模板配置',
+          subtitle: '选择前台商城的页面展示模板，切换后立即生效',
+          cardMode: '卡片模式',
+          cardModeDesc: '默认模板，以卡片网格展示商品，适合图片展示型商品',
+          listMode: '列表模式',
+          listModeDesc: '以列表形式紧凑展示商品，适合商品数量较多的场景',
         },
         brand: {
           title: '品牌展示配置',
@@ -4647,6 +4656,7 @@ const messages = {
         },
         tabs: {
           basic: '基礎配置 (Basic)',
+          template: '模板配置 (Template)',
           scripts: '前台腳本 (Scripts)',
           about: '關於我們 (About)',
           legal: '法律條款 (Legal/Terms)',
@@ -4657,6 +4667,14 @@ const messages = {
           dashboard: '儀表板 (Dashboard)',
           affiliate: '推廣返利 (Affiliate)',
           security: '安全設定 (Security)',
+        },
+        template: {
+          title: '前台模板配置',
+          subtitle: '選擇前台商城的頁面展示模板，切換後立即生效',
+          cardMode: '卡片模式',
+          cardModeDesc: '預設模板，以卡片網格展示商品，適合圖片展示型商品',
+          listMode: '列表模式',
+          listModeDesc: '以列表形式緊湊展示商品，適合商品數量較多的場景',
         },
         brand: {
           title: '品牌展示配置',
@@ -7367,6 +7385,7 @@ const messages = {
         },
         tabs: {
           basic: 'Basic',
+          template: 'Template',
           scripts: 'Scripts',
           about: 'About',
           legal: 'Legal/Terms',
@@ -7377,6 +7396,14 @@ const messages = {
           dashboard: 'Dashboard',
           affiliate: 'Affiliate',
           security: 'Security',
+        },
+        template: {
+          title: 'Storefront Template',
+          subtitle: 'Choose the storefront display template, changes take effect immediately',
+          cardMode: 'Card Mode',
+          cardModeDesc: 'Default template, displays products in a card grid, ideal for image-rich products',
+          listMode: 'List Mode',
+          listModeDesc: 'Displays products in a compact list, ideal for stores with many products',
         },
         brand: {
           title: 'Brand Display',
