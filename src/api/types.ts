@@ -127,6 +127,7 @@ export interface AdminFulfillment {
   created_at: string
   updated_at: string
   payload?: string
+  payload_line_count?: number
   delivery_data?: Record<string, unknown>
 }
 
@@ -518,6 +519,7 @@ export interface AdminProcurementOrder {
   next_retry_at?: string
   trace_id: string
   upstream_payload?: string
+  upstream_payload_line_count?: number
   created_at: string
   updated_at: string
   connection_name?: string

@@ -674,8 +674,8 @@ onMounted(() => {
             <div class="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2">
               <span class="text-xs font-semibold text-muted-foreground uppercase">{{ t('procurement.detail.upstreamPayload') }}</span>
               <div class="flex items-center gap-2">
-                <span v-if="detailOrder.upstream_payload_line_count > 100" class="text-xs text-muted-foreground">{{ t('admin.orders.fulfillmentTotalLines', { count: detailOrder.upstream_payload_line_count }) }}</span>
-                <Button v-if="detailOrder.upstream_payload_line_count > 100" size="xs" variant="outline" :disabled="procurementDownloading" @click="handleDownloadUpstreamPayload(detailOrder.id)">
+                <span v-if="(detailOrder.upstream_payload_line_count ?? 0) > 100" class="text-xs text-muted-foreground">{{ t('admin.orders.fulfillmentTotalLines', { count: detailOrder.upstream_payload_line_count }) }}</span>
+                <Button v-if="(detailOrder.upstream_payload_line_count ?? 0) > 100" size="xs" variant="outline" :disabled="procurementDownloading" @click="handleDownloadUpstreamPayload(detailOrder.id)">
                   {{ procurementDownloading ? t('admin.orders.fulfillmentDownloading') : t('admin.orders.fulfillmentDownload') }}
                 </Button>
               </div>
