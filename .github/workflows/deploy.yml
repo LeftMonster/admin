@@ -1,0 +1,67 @@
+name: Deploy Admin Frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_host:
+        description: '服务器 IP 或域名'
+        required: true
+      deploy_port:
+        description: 'SSH 端口'
+        required: true
+        default: '22'
+      deploy_user:
+        description: 'SSH 用户名'
+        required: true
+        default: 'root'
+      deploy_password:
+        description: 'SSH 密码'
+        required: true
+      api_base_url:
+        description: 'API 地址（如 https://api.yourdomain.com）'
+        required: false
+        default: ''
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ inputs.api_base_url }}
+
+      - name: Prepare remote directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ inputs.deploy_host }}
+          port: ${{ inputs.deploy_port }}
+          username: ${{ inputs.deploy_user }}
+          password: ${{ inputs.deploy_password }}
+          script: |
+            mkdir -p /var/www/dujiao/admin
+            rm -rf /var/www/dujiao/admin/*
+
+      - name: Upload dist
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ inputs.deploy_host }}
+          port: ${{ inputs.deploy_port }}
+          username: ${{ inputs.deploy_user }}
+          password: ${{ inputs.deploy_password }}
+          source: "dist/*"
+          target: "/var/www/dujiao/admin/"
+          strip_components: 1
